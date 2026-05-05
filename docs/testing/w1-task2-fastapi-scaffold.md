@@ -112,7 +112,7 @@ npx --yes @usebruno/cli run --env local
 
 Atteso: 9 request, 14 assert, tutti verdi. La collection include 4 happy (health, webhook stub, e2e step 1, e2e step 2) e 5 exception (`health/exceptions/{405-post,404-typo}.bru`, `webhook/exceptions/{405-get,404-typo,202-empty-body-pre-task3}.bru`).
 
-**Quirk noto della GUI Bruno.** Quando apri la GUI desktop di Bruno (https://www.usebruno.com/downloads) sulla collection, la GUI può aggiungere automaticamente un blocco `vars:pre-request { baseUrl: http://localhost:8000 }` ai file `.bru` che apri. È un side-effect del tool, non una scelta nostra. La convenzione del progetto (vedi `CLAUDE.md`) è che i `.bru` non devono contenere URL hardcoded; se in code review vedi questi blocchi ricomparsi, rimuovili. In alternativa puoi usare solo la CLI Bruno (`bru run --env local`), che non altera i file finché non passi `--env-var`.
+**Lavorare nella GUI Bruno.** Prima di aprire qualunque `.bru` nella GUI desktop, seleziona l'environment **"local"** dal dropdown in alto a destra. Senza env attivo la GUI non risolve `{{baseUrl}}` e inietta `vars:pre-request { baseUrl: http://localhost:8000 }` nei file aperti — un override hardcoded che rompe il run da CLI. Con l'env attivo la GUI rispetta le variabili e non tocca i file. Convenzione fissata in `CLAUDE.md`.
 
 ## Cosa cercare nei log
 

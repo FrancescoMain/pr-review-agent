@@ -76,6 +76,8 @@ kill %1
 
 Richiede Node.js 18+. Bruno CLI va lanciata dalla cartella che contiene `bruno.json`: senza argomento posizionale scansiona ricorsivamente tutto, quindi non serve manutenere una whitelist quando aggiungi nuove aree.
 
+**Lavorare nella GUI Bruno (desktop):** prima di aprire qualunque `.bru`, **seleziona l'environment "local"** dal dropdown in alto a destra. Senza un environment attivo, la GUI non riesce a risolvere `{{baseUrl}}` e inietta automaticamente un blocco `vars:pre-request { baseUrl: http://localhost:8000 }` nei file aperti — che diventa un override hardcoded e rompe il run da CLI. Con l'env attivo la GUI rispetta `{{baseUrl}}` e non altera i file. Se vedi `vars:pre-request` ricomparsi in `git status`, hai aperto un file senza env selezionato: rimuovili prima del commit.
+
 ## Testing guide per ogni feature (standard di sviluppo)
 
 A chiusura di **ogni task** consegno a Francesco un file `docs/testing/<task-slug>.md` (es. `docs/testing/w1-task2-fastapi-scaffold.md`) che contiene:

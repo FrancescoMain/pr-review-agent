@@ -109,7 +109,9 @@ curl -i http://localhost:8001/webhook/github
 
 Atteso: `405 Method Not Allowed`.
 
-### 8 — Bruno collection (CLI)
+### 8 — Bruno collection (CLI o GUI)
+
+**Da CLI:**
 
 ```bash
 export GITHUB_WEBHOOK_SECRET=test-bruno-secret
@@ -118,6 +120,13 @@ npx --yes @usebruno/cli run --env local
 ```
 
 Atteso: **12 request, 22 assert verdi**. La collection include 4 happy path (2 health + 2 webhook firmati: pull_request e ping) e 8 exception (`health/exceptions/{405-post,404-typo}`, `webhook/exceptions/{405-get,404-typo,401-missing-signature,401-invalid-signature,422-malformed-pull-request}`, `e2e/02-webhook-pull-request`).
+
+**Da GUI:**
+
+1. Apri la cartella `bruno/` con la GUI desktop di Bruno.
+2. **Seleziona l'environment "local"** dal dropdown in alto a destra (è il punto critico: senza env attivo la GUI rompe i file — vedi `CLAUDE.md` per i dettagli).
+3. Esporta `GITHUB_WEBHOOK_SECRET` nello shell da cui hai lanciato la GUI, oppure setta una system-wide env var, perché i pre-script del webhook leggono il secret da `process.env`.
+4. Click destro sulla collection → **Run Collection** per eseguire tutto, oppure clicca singole request per debug puntuale.
 
 I `.bru` del webhook calcolano la firma in pre-script con `crypto-js` leggendo il secret da `bru.getProcessEnv('GITHUB_WEBHOOK_SECRET')`. Il body viene letto da `req.getBody()` e firmato così com'è — questo significa che ogni nuovo `.bru` con body deve seguire lo stesso pattern (vedi `bruno/webhook/post-webhook-pull-request.bru` come template).
 
