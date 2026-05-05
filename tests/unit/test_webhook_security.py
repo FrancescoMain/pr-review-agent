@@ -137,3 +137,31 @@ def test_ping_event_returns_202_ignored(client: TestClient) -> None:
 def test_get_method_returns_405(client: TestClient) -> None:
     response = client.get("/webhook/github")
     assert response.status_code == 405
+
+
+def test_webhook_schedules_agent_run(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    async def _fake_runner(state: dict[str, object]) -> dict[str, object]:
+        captured.update(state)
+        return state
+
+    client.app.state.agent_runner = _fake_runner  # type: ignore[attr-defined]
+
+    body = json.dumps(_pr_payload()).encode()
+    response = client.post(
+        "/webhook/github",
+        content=body,
+        headers={
+            "X-GitHub-Event": "pull_request",
+            "X-Hub-Signature-256": _sign(body),
+            "Content-Type": "application/json",
+        },
+    )
+
+    assert response.status_code == 202
+    # FastAPI runs BackgroundTasks after the response on the same loop;
+    # TestClient blocks until they finish before returning.
+    assert captured["repo"] == "francesco/playground"
+    assert captured["pr_number"] == 42
+    assert captured["installation_id"] == 99

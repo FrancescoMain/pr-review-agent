@@ -7,6 +7,7 @@ Una guida per task. Ogni voce racconta cosa è stato consegnato, come testarlo a
 | 1 | 2 — FastAPI scaffold + Pydantic Settings + Bruno collection | [w1-task2-fastapi-scaffold.md](./w1-task2-fastapi-scaffold.md) | ✅ |
 | 1 | 3 — Webhook signature verification + payload parsing | [w1-task3-webhook-security.md](./w1-task3-webhook-security.md) | ✅ |
 | 1 | 4 — GitHub App auth (JWT + installation token + cache) | [w1-task4-github-app-auth.md](./w1-task4-github-app-auth.md) | ✅ |
+| 1 | 5 — LangGraph hello-world + dispatch reale (triage → publisher) | [w1-task5-langgraph-hello-world.md](./w1-task5-langgraph-hello-world.md) | ✅ |
 
 ## Convenzioni
 

@@ -31,6 +31,7 @@ def test_settings_reads_env_vars(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     monkeypatch.setenv("MAX_TOOL_CALLS_PER_NODE", "30")
     monkeypatch.setenv("GITHUB_APP_ID", "987654")
     monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY_PATH", str(pem))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
     settings = Settings(_env_file=None)  # type: ignore[call-arg]
     assert settings.environment == "production"
     assert settings.log_level == "WARNING"

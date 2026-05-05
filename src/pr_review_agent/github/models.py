@@ -26,6 +26,7 @@ class PullRequest(BaseModel):
 
     number: int
     title: str
+    body: str | None = None
     head: GitRef
     base: GitRef
 
