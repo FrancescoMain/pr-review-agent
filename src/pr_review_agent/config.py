@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     github_app_private_key_path: Path | None = None
     anthropic_api_key: SecretStr = SecretStr("")
 
+    langsmith_tracing: bool = False
+    langsmith_api_key: SecretStr = SecretStr("")
+    langsmith_project: str = "pr-review-agent"
+
     @model_validator(mode="after")
     def _require_credentials_outside_dev(self) -> Self:
         if self.environment != "development":
