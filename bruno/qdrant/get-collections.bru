@@ -1,0 +1,16 @@
+meta {
+  name: GET qdrant collections
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{qdrantUrl}}/collections
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.status: eq ok
+}
