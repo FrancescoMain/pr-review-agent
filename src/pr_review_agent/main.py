@@ -10,6 +10,7 @@ Exception handlers map domain errors to safe HTTP responses without
 leaking internals (signature failures are always a generic 401).
 """
 
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -28,6 +29,24 @@ from pr_review_agent.observability.logging import configure_logging
 from pr_review_agent.webhook import router as webhook_router
 
 _log = structlog.get_logger(__name__)
+
+
+def _enable_langsmith_tracing(settings: Settings) -> None:
+    """LangChain reads LANGSMITH_* directly from os.environ; pydantic-settings
+    only loads the values into our Settings object, so we propagate them here
+    when tracing is enabled. We use setdefault so an explicit shell export
+    still wins over the .env value.
+    """
+    if not settings.langsmith_tracing:
+        return
+    api_key = settings.langsmith_api_key.get_secret_value()
+    if not api_key:
+        _log.warning("LangSmith tracing requested but LANGSMITH_API_KEY is empty")
+        return
+    os.environ.setdefault("LANGSMITH_TRACING", "true")
+    os.environ.setdefault("LANGSMITH_API_KEY", api_key)
+    os.environ.setdefault("LANGSMITH_PROJECT", settings.langsmith_project)
+    _log.info("LangSmith tracing enabled", project=settings.langsmith_project)
 
 
 def _build_runner(settings: Settings, http: httpx.AsyncClient) -> AgentRunner | None:
@@ -62,6 +81,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         level=settings.log_level,
         json_logs=settings.environment != "development",
     )
+    _enable_langsmith_tracing(settings)
     async with httpx.AsyncClient(timeout=30.0) as http:
         app.state.http_client = http
         app.state.agent_runner = _build_runner(settings, http)

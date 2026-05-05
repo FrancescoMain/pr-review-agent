@@ -32,12 +32,26 @@ def test_settings_reads_env_vars(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     monkeypatch.setenv("GITHUB_APP_ID", "987654")
     monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY_PATH", str(pem))
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    monkeypatch.setenv("LANGSMITH_TRACING", "true")
+    monkeypatch.setenv("LANGSMITH_API_KEY", "lsv2_pt_test")
+    monkeypatch.setenv("LANGSMITH_PROJECT", "pr-review-agent-ci")
     settings = Settings(_env_file=None)  # type: ignore[call-arg]
     assert settings.environment == "production"
     assert settings.log_level == "WARNING"
     assert settings.cost_cap_per_pr_usd == 1.25
     assert settings.max_tool_calls_per_node == 30
     assert settings.github_app_id == 987654
+    assert settings.langsmith_tracing is True
+    assert settings.langsmith_project == "pr-review-agent-ci"
+
+
+def test_langsmith_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    for var in ("LANGSMITH_TRACING", "LANGSMITH_API_KEY", "LANGSMITH_PROJECT"):
+        monkeypatch.delenv(var, raising=False)
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.langsmith_tracing is False
+    assert settings.langsmith_api_key.get_secret_value() == ""
+    assert settings.langsmith_project == "pr-review-agent"
 
 
 def test_settings_validator_rejects_missing_credentials_in_production(

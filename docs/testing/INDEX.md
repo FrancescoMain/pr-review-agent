@@ -9,6 +9,7 @@ Una guida per task. Ogni voce racconta cosa è stato consegnato, come testarlo a
 | 1 | 4 — GitHub App auth (JWT + installation token + cache) | [w1-task4-github-app-auth.md](./w1-task4-github-app-auth.md) | ✅ |
 | 1 | 5 — LangGraph hello-world + dispatch reale (triage → publisher) | [w1-task5-langgraph-hello-world.md](./w1-task5-langgraph-hello-world.md) | ✅ |
 | 1 | 6 — Docker Compose (Postgres + Qdrant) | [w1-task6-docker-compose.md](./w1-task6-docker-compose.md) | ✅ |
+| 1 | 7 — LangSmith tracing + GitHub Actions CI | [w1-task7-langsmith-and-ci.md](./w1-task7-langsmith-and-ci.md) | ✅ |
 
 ## Convenzioni
 
