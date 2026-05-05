@@ -21,6 +21,13 @@ body:text {
   {"action":"opened","number":42,"pull_request":{"number":42,"title":"Hello from Bruno","head":{"ref":"feature/x","sha":"deadbeef"},"base":{"ref":"main","sha":"cafebabe"}},"repository":{"full_name":"francesco/pr-review-agent-playground"}}
 }
 
+assert {
+  res.status: eq 202
+  res.body.status: eq accepted
+  res.body.pr: eq 42
+  res.body.repo: eq francesco/pr-review-agent-playground
+}
+
 script:pre-request {
   const CryptoJS = require('crypto-js');
   const secret = bru.getProcessEnv('GITHUB_WEBHOOK_SECRET');
@@ -28,11 +35,4 @@ script:pre-request {
   const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
   const sig = 'sha256=' + CryptoJS.HmacSHA256(bodyStr, secret).toString(CryptoJS.enc.Hex);
   bru.setVar('signature', sig);
-}
-
-assert {
-  res.status: eq 202
-  res.body.status: eq accepted
-  res.body.pr: eq 42
-  res.body.repo: eq francesco/pr-review-agent-playground
 }
