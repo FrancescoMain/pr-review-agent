@@ -60,4 +60,5 @@ async def github_webhook(
         "status": "accepted",
         "pr": pr_event.number,
         "repo": pr_event.repository.full_name,
+        "installation_id": pr_event.installation.id,
     }

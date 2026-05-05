@@ -44,6 +44,7 @@ def _pr_payload() -> dict[str, object]:
             "base": {"ref": "main", "sha": "cafebabe"},
         },
         "repository": {"full_name": "francesco/playground"},
+        "installation": {"id": 99},
     }
 
 
@@ -63,6 +64,7 @@ def test_valid_signature_pull_request_returns_202(client: TestClient) -> None:
     assert data["status"] == "accepted"
     assert data["pr"] == 42
     assert data["repo"] == "francesco/playground"
+    assert data["installation_id"] == 99
 
 
 def test_missing_signature_returns_401(client: TestClient) -> None:

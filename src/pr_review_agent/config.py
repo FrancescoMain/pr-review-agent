@@ -7,9 +7,10 @@ config surface area.
 """
 
 from functools import lru_cache
-from typing import Literal
+from pathlib import Path
+from typing import Literal, Self
 
-from pydantic import SecretStr
+from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
@@ -30,6 +31,17 @@ class Settings(BaseSettings):
     max_tool_calls_per_node: int = 15
 
     github_webhook_secret: SecretStr = SecretStr("")
+    github_app_id: int = 0
+    github_app_private_key_path: Path | None = None
+
+    @model_validator(mode="after")
+    def _require_github_credentials_outside_dev(self) -> Self:
+        if self.environment != "development":
+            if self.github_app_id <= 0:
+                raise ValueError("github_app_id must be a positive integer outside development")
+            if self.github_app_private_key_path is None:
+                raise ValueError("github_app_private_key_path must be set outside development")
+        return self
 
 
 @lru_cache(maxsize=1)

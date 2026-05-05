@@ -12,3 +12,11 @@ class GitHubError(Exception):
 
 class WebhookSignatureError(GitHubError):
     """Incoming webhook signature is missing, malformed, or does not match."""
+
+
+class GitHubAPIError(GitHubError):
+    """GitHub API responded with an unexpected non-2xx status."""
+
+
+class GitHubAuthError(GitHubError):
+    """GitHub App JWT or installation token was rejected (401/403)."""

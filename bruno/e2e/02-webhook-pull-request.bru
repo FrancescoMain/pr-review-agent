@@ -17,7 +17,7 @@ headers {
 }
 
 body:text {
-  {"action":"opened","number":7,"pull_request":{"number":7,"title":"e2e PR","head":{"ref":"feature/e2e","sha":"abc123"},"base":{"ref":"main","sha":"def456"}},"repository":{"full_name":"francesco/playground"}}
+  {"action":"opened","number":7,"pull_request":{"number":7,"title":"e2e PR","head":{"ref":"feature/e2e","sha":"abc123"},"base":{"ref":"main","sha":"def456"}},"repository":{"full_name":"francesco/playground"},"installation":{"id":777}}
 }
 
 script:pre-request {
@@ -36,4 +36,5 @@ assert {
   res.status: eq 202
   res.body.status: eq accepted
   res.body.pr: eq 7
+  res.body.installation_id: eq 777
 }

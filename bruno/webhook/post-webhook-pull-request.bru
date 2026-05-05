@@ -18,7 +18,7 @@ headers {
 }
 
 body:text {
-  {"action":"opened","number":42,"pull_request":{"number":42,"title":"Hello from Bruno","head":{"ref":"feature/x","sha":"deadbeef"},"base":{"ref":"main","sha":"cafebabe"}},"repository":{"full_name":"francesco/pr-review-agent-playground"}}
+  {"action":"opened","number":42,"pull_request":{"number":42,"title":"Hello from Bruno","head":{"ref":"feature/x","sha":"deadbeef"},"base":{"ref":"main","sha":"cafebabe"}},"repository":{"full_name":"francesco/pr-review-agent-playground"},"installation":{"id":12345}}
 }
 
 assert {
@@ -26,6 +26,7 @@ assert {
   res.body.status: eq accepted
   res.body.pr: eq 42
   res.body.repo: eq francesco/pr-review-agent-playground
+  res.body.installation_id: eq 12345
 }
 
 script:pre-request {

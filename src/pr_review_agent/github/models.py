@@ -30,6 +30,12 @@ class PullRequest(BaseModel):
     base: GitRef
 
 
+class Installation(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: int
+
+
 class PullRequestEvent(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -37,3 +43,4 @@ class PullRequestEvent(BaseModel):
     number: int
     pull_request: PullRequest
     repository: Repository
+    installation: Installation
