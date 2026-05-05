@@ -1,0 +1,38 @@
+meta {
+  name: POST webhook github - pull_request opened (signed)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/webhook/github
+  body: text
+  auth: none
+}
+
+headers {
+  X-GitHub-Event: pull_request
+  X-GitHub-Delivery: 00000000-0000-0000-0000-000000000001
+  Content-Type: application/json
+  X-Hub-Signature-256: {{signature}}
+}
+
+body:text {
+  {"action":"opened","number":42,"pull_request":{"number":42,"title":"Hello from Bruno","head":{"ref":"feature/x","sha":"deadbeef"},"base":{"ref":"main","sha":"cafebabe"}},"repository":{"full_name":"francesco/pr-review-agent-playground"}}
+}
+
+script:pre-request {
+  const CryptoJS = require('crypto-js');
+  const secret = bru.getProcessEnv('GITHUB_WEBHOOK_SECRET');
+  const body = req.getBody();
+  const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+  const sig = 'sha256=' + CryptoJS.HmacSHA256(bodyStr, secret).toString(CryptoJS.enc.Hex);
+  bru.setVar('signature', sig);
+}
+
+assert {
+  res.status: eq 202
+  res.body.status: eq accepted
+  res.body.pr: eq 42
+  res.body.repo: eq francesco/pr-review-agent-playground
+}

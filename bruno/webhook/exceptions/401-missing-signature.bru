@@ -1,0 +1,25 @@
+meta {
+  name: POST webhook github -> 401 (missing signature header)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/webhook/github
+  body: text
+  auth: none
+}
+
+headers {
+  X-GitHub-Event: pull_request
+  Content-Type: application/json
+}
+
+body:text {
+  {"action":"opened","number":1}
+}
+
+assert {
+  res.status: eq 401
+  res.body.detail: eq invalid signature
+}

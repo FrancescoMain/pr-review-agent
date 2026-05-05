@@ -1,0 +1,34 @@
+meta {
+  name: POST webhook github -> 422 (pull_request payload missing required fields)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/webhook/github
+  body: text
+  auth: none
+}
+
+headers {
+  X-GitHub-Event: pull_request
+  Content-Type: application/json
+  X-Hub-Signature-256: {{signature}}
+}
+
+body:text {
+  {"action":"opened"}
+}
+
+script:pre-request {
+  const CryptoJS = require('crypto-js');
+  const secret = bru.getProcessEnv('GITHUB_WEBHOOK_SECRET');
+  const body = req.getBody();
+  const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+  const sig = 'sha256=' + CryptoJS.HmacSHA256(bodyStr, secret).toString(CryptoJS.enc.Hex);
+  bru.setVar('signature', sig);
+}
+
+assert {
+  res.status: eq 422
+}

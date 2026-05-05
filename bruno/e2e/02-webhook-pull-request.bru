@@ -1,0 +1,36 @@
+meta {
+  name: e2e — health then signed pull_request webhook
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/webhook/github
+  body: text
+  auth: none
+}
+
+headers {
+  X-GitHub-Event: pull_request
+  Content-Type: application/json
+  X-Hub-Signature-256: {{signature}}
+}
+
+body:text {
+  {"action":"opened","number":7,"pull_request":{"number":7,"title":"e2e PR","head":{"ref":"feature/e2e","sha":"abc123"},"base":{"ref":"main","sha":"def456"}},"repository":{"full_name":"francesco/playground"}}
+}
+
+script:pre-request {
+  const CryptoJS = require('crypto-js');
+  const secret = bru.getProcessEnv('GITHUB_WEBHOOK_SECRET');
+  const body = req.getBody();
+  const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+  const sig = 'sha256=' + CryptoJS.HmacSHA256(bodyStr, secret).toString(CryptoJS.enc.Hex);
+  bru.setVar('signature', sig);
+}
+
+assert {
+  res.status: eq 202
+  res.body.status: eq accepted
+  res.body.pr: eq 7
+}

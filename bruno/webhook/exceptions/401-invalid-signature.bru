@@ -1,0 +1,34 @@
+meta {
+  name: POST webhook github -> 401 (signature computed with wrong secret)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/webhook/github
+  body: text
+  auth: none
+}
+
+headers {
+  X-GitHub-Event: pull_request
+  Content-Type: application/json
+  X-Hub-Signature-256: {{signature}}
+}
+
+body:text {
+  {"action":"opened","number":1}
+}
+
+script:pre-request {
+  const CryptoJS = require('crypto-js');
+  const wrongSecret = 'definitely-not-the-real-secret';
+  const body = req.getBody();
+  const sig = 'sha256=' + CryptoJS.HmacSHA256(body, wrongSecret).toString(CryptoJS.enc.Hex);
+  bru.setVar('signature', sig);
+}
+
+assert {
+  res.status: eq 401
+  res.body.detail: eq invalid signature
+}

@@ -9,6 +9,7 @@ config surface area.
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
@@ -27,6 +28,8 @@ class Settings(BaseSettings):
     log_level: LogLevel = "INFO"
     cost_cap_per_pr_usd: float = 0.50
     max_tool_calls_per_node: int = 15
+
+    github_webhook_secret: SecretStr = SecretStr("")
 
 
 @lru_cache(maxsize=1)

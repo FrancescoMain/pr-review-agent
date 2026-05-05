@@ -5,6 +5,7 @@ Una guida per task. Ogni voce racconta cosa è stato consegnato, come testarlo a
 | Settimana | Task | Guida | Stato |
 |---|---|---|---|
 | 1 | 2 — FastAPI scaffold + Pydantic Settings + Bruno collection | [w1-task2-fastapi-scaffold.md](./w1-task2-fastapi-scaffold.md) | ✅ |
+| 1 | 3 — Webhook signature verification + payload parsing | [w1-task3-webhook-security.md](./w1-task3-webhook-security.md) | ✅ |
 
 ## Convenzioni
 
