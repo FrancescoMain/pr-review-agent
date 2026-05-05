@@ -36,6 +36,43 @@ Leggi entrambi prima di iniziare una nuova area del progetto.
 - ❌ Aggiungere dipendenze "perché potrebbe servire"
 - ❌ Introdurre `openai` / `voyageai` / `cohere` come dipendenze (vedi deviazioni)
 
+## API testing — Bruno collection (standard di sviluppo)
+
+Ogni task che introduce o modifica un endpoint HTTP, un webhook, o un flusso end-to-end **deve** aggiornare la Bruno collection in `bruno/`. La collection è strumento di sviluppo (debug manuale + documentazione viva) **e** di automazione: dopo ogni task, `npx @usebruno/cli run --env local bruno/` deve restare verde.
+
+Struttura:
+
+```
+bruno/
+├── bruno.json                    # collection config
+├── environments/
+│   └── local.bru                 # baseUrl=http://localhost:8000
+├── <area>/                       # es. health/, webhook/, agent/
+│   └── <verb-resource>.bru       # es. get-health.bru, post-webhook-stub.bru
+└── e2e/
+    └── NN-<scenario>.bru         # sequenze multi-request
+```
+
+Convenzioni per i `.bru`:
+
+- **Asserzioni minime, non duplicate dai pytest:** Bruno copre il contratto HTTP esterno (status, shape JSON essenziale) e i flussi e2e. Pytest copre la logica interna. Se un check è già in pytest unit, non riscriverlo in Bruno e viceversa.
+- **Variabili ambiente:** mai hardcodare URL o secret. Usa `{{baseUrl}}`, `{{webhookSecret}}`, ecc. dichiarate in `bruno/environments/local.bru`.
+- **Niente segreti reali nei file `.bru`:** placeholder o `{{ENV_VAR}}` da iniettare. Le credenziali vere vivono in `.env`, gitignored.
+
+Esecuzione richiesta nei comandi di verifica di ogni task con server-up:
+
+```bash
+# Avvia il server in background. Default 8001 perché 8000 è spesso
+# occupata da altri servizi locali su questa macchina (cambia in
+# bruno/environments/local.bru se la tua è libera).
+uv run uvicorn pr_review_agent.main:app --port 8001 &
+until curl -sf http://localhost:8001/health > /dev/null; do sleep 0.2; done
+(cd bruno && npx --yes @usebruno/cli run --env local)
+kill %1
+```
+
+Richiede Node.js 18+ sulla macchina. Bruno CLI va lanciata dalla cartella che contiene `bruno.json` (la root della collection): senza argomento posizionale scansiona automaticamente tutte le sottocartelle, quindi non serve manutenere una whitelist quando aggiungi nuove aree.
+
 ## Workflow con Francesco (SPEC §11)
 
 1. **Pianifica per task** prima di scrivere codice: file da toccare, test da scrivere, comando di verifica. **Aspetta OK esplicito** prima di iniziare.

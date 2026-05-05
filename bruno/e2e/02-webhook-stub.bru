@@ -1,0 +1,28 @@
+meta {
+  name: e2e — webhook stub after health
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/webhook/github
+  body: json
+  auth: none
+}
+
+headers {
+  X-GitHub-Event: pull_request
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "action": "opened",
+    "number": 1
+  }
+}
+
+assert {
+  res.status: eq 202
+  res.body.status: eq accepted
+}
