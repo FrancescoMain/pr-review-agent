@@ -38,24 +38,27 @@ Leggi entrambi prima di iniziare una nuova area del progetto.
 
 ## API testing — Bruno collection (standard di sviluppo)
 
-Ogni task che introduce o modifica un endpoint HTTP, un webhook, o un flusso end-to-end **deve** aggiornare la Bruno collection in `bruno/`. La collection è strumento di sviluppo (debug manuale + documentazione viva) **e** di automazione: dopo ogni task, `npx @usebruno/cli run --env local bruno/` deve restare verde.
+Ogni task che introduce o modifica un endpoint HTTP, un webhook, o un flusso end-to-end **deve** aggiornare la Bruno collection in `bruno/`. La collection è strumento di sviluppo (debug manuale + documentazione viva) **e** di automazione: dopo ogni task, `bru run --env local` deve restare verde.
 
 Struttura:
 
 ```
 bruno/
-├── bruno.json                    # collection config
+├── bruno.json                                # collection config
 ├── environments/
-│   └── local.bru                 # baseUrl=http://localhost:8000
-├── <area>/                       # es. health/, webhook/, agent/
-│   └── <verb-resource>.bru       # es. get-health.bru, post-webhook-stub.bru
+│   └── local.bru                             # baseUrl=http://localhost:8001
+├── <area>/                                   # es. health/, webhook/, agent/
+│   ├── <verb-resource>.bru                   # happy path
+│   └── exceptions/
+│       └── <verb-resource>-<code>-<reason>.bru  # 400/401/404/405/422/5xx
 └── e2e/
-    └── NN-<scenario>.bru         # sequenze multi-request
+    └── NN-<scenario>.bru                     # sequenze multi-request
 ```
 
 Convenzioni per i `.bru`:
 
-- **Asserzioni minime, non duplicate dai pytest:** Bruno copre il contratto HTTP esterno (status, shape JSON essenziale) e i flussi e2e. Pytest copre la logica interna. Se un check è già in pytest unit, non riscriverlo in Bruno e viceversa.
+- **Exception coverage obbligatoria:** ogni endpoint deve avere request che esercitano almeno gli error-status che la feature può produrre (400 payload malformato, 401/403 auth mancante o invalida, 404 rotta inesistente, 405 metodo non permesso, 422 validation, 5xx dove rilevante). Stanno in `<area>/exceptions/`. Se un certo status non è producibile, dichiaralo nella testing guide.
+- **Asserzioni minime, non duplicate dai pytest:** Bruno copre il contratto HTTP esterno (status, shape JSON essenziale) e i flussi e2e. Pytest copre la logica interna.
 - **Variabili ambiente:** mai hardcodare URL o secret. Usa `{{baseUrl}}`, `{{webhookSecret}}`, ecc. dichiarate in `bruno/environments/local.bru`.
 - **Niente segreti reali nei file `.bru`:** placeholder o `{{ENV_VAR}}` da iniettare. Le credenziali vere vivono in `.env`, gitignored.
 
@@ -71,7 +74,20 @@ until curl -sf http://localhost:8001/health > /dev/null; do sleep 0.2; done
 kill %1
 ```
 
-Richiede Node.js 18+ sulla macchina. Bruno CLI va lanciata dalla cartella che contiene `bruno.json` (la root della collection): senza argomento posizionale scansiona automaticamente tutte le sottocartelle, quindi non serve manutenere una whitelist quando aggiungi nuove aree.
+Richiede Node.js 18+. Bruno CLI va lanciata dalla cartella che contiene `bruno.json`: senza argomento posizionale scansiona ricorsivamente tutto, quindi non serve manutenere una whitelist quando aggiungi nuove aree.
+
+## Testing guide per ogni feature (standard di sviluppo)
+
+A chiusura di **ogni task** consegno a Francesco un file `docs/testing/<task-slug>.md` (es. `docs/testing/w1-task2-fastapi-scaffold.md`) che contiene:
+
+1. **Cosa è stato consegnato** — 3-4 righe.
+2. **Come preparare l'ambiente di test** — server up, env vars, eventuali servizi esterni.
+3. **Scenari da testare manualmente** — lista numerata, ognuno con: comando esatto / sequenza, risultato atteso, interpretazione ("se vedi X significa Y").
+4. **Happy path e scenari di errore** — entrambi obbligatori. Se un certo errore non è producibile a questo stadio della task, dichiararlo.
+5. **Cosa cercare nei log** — quando rilevante.
+6. **Riferimenti ai file** — link ai file modificati/aggiunti.
+
+`docs/testing/INDEX.md` mantiene l'elenco delle guide. La testing guide è scritta in italiano, tono tecnico-narrativo, pensata per Francesco come revisore.
 
 ## Workflow con Francesco (SPEC §11)
 

@@ -1,0 +1,15 @@
+meta {
+  name: GET /webhook/github -> 405 (only POST allowed)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/webhook/github
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 405
+}

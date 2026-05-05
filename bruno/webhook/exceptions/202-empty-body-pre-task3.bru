@@ -1,0 +1,28 @@
+meta {
+  name: POST /webhook/github with empty body -> 202 (currently permissive, will become 400 in Task 3)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/webhook/github
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {}
+}
+
+vars:pre-request {
+  baseUrl: http://localhost:8001
+}
+
+assert {
+  res.status: eq 202
+  res.body.status: eq accepted
+}

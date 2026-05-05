@@ -1,0 +1,15 @@
+meta {
+  name: GET /healthz -> 404 (route does not exist)
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/healthz
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 404
+}

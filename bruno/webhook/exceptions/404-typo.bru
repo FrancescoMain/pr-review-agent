@@ -1,0 +1,27 @@
+meta {
+  name: POST /webhook/githubz -> 404 (route does not exist)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/webhook/githubz
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {}
+}
+
+vars:pre-request {
+  baseUrl: http://localhost:8001
+}
+
+assert {
+  res.status: eq 404
+}

@@ -1,0 +1,15 @@
+meta {
+  name: POST /health -> 405 (only GET allowed)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/health
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 405
+}
