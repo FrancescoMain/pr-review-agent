@@ -22,7 +22,10 @@ body:text {
 
 script:pre-request {
   const CryptoJS = require('crypto-js');
-  const secret = bru.getProcessEnv('GITHUB_WEBHOOK_SECRET');
+  const secret = bru.getEnvVar('webhookSecret') || bru.getProcessEnv('GITHUB_WEBHOOK_SECRET');
+  if (!secret) {
+    throw new Error("missing webhook secret: set 'webhookSecret' as a secret env var in the Bruno GUI, or export GITHUB_WEBHOOK_SECRET when using the CLI");
+  }
   const body = req.getBody();
   const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
   const sig = 'sha256=' + CryptoJS.HmacSHA256(bodyStr, secret).toString(CryptoJS.enc.Hex);

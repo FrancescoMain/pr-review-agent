@@ -125,8 +125,9 @@ Atteso: **12 request, 22 assert verdi**. La collection include 4 happy path (2 h
 
 1. Apri la cartella `bruno/` con la GUI desktop di Bruno.
 2. **Seleziona l'environment "local"** dal dropdown in alto a destra (è il punto critico: senza env attivo la GUI rompe i file — vedi `CLAUDE.md` per i dettagli).
-3. Esporta `GITHUB_WEBHOOK_SECRET` nello shell da cui hai lanciato la GUI, oppure setta una system-wide env var, perché i pre-script del webhook leggono il secret da `process.env`.
-4. Click destro sulla collection → **Run Collection** per eseguire tutto, oppure clicca singole request per debug puntuale.
+3. **Aggiungi la variabile secret `webhookSecret` all'environment.** La GUI desktop (Bruno per Windows) **non vede** le env vars del terminale WSL, quindi `bru.getProcessEnv('GITHUB_WEBHOOK_SECRET')` ritorna `undefined`. Soluzione: dal dropdown environment → click sulla matita di "local" (Configure / Edit Environment) → **Add Variable** → nome `webhookSecret`, valore (es. `test-bruno-secret`), spunta **Secret**. Salva. Bruno memorizza il valore localmente fuori dal repo (gitignored), quindi nessun secret finisce committato. I pre-script leggono `bru.getEnvVar('webhookSecret')` con fallback a `bru.getProcessEnv('GITHUB_WEBHOOK_SECRET')` per compatibilità con la CLI.
+4. Avvia il server FastAPI con lo **stesso** secret nel suo env: `GITHUB_WEBHOOK_SECRET=test-bruno-secret uv run uvicorn pr_review_agent.main:app --port 8001`.
+5. Click destro sulla collection → **Run Collection** per eseguire tutto, oppure clicca singole request per debug puntuale.
 
 I `.bru` del webhook calcolano la firma in pre-script con `crypto-js` leggendo il secret da `bru.getProcessEnv('GITHUB_WEBHOOK_SECRET')`. Il body viene letto da `req.getBody()` e firmato così com'è — questo significa che ogni nuovo `.bru` con body deve seguire lo stesso pattern (vedi `bruno/webhook/post-webhook-pull-request.bru` come template).
 

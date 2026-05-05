@@ -78,6 +78,8 @@ Richiede Node.js 18+. Bruno CLI va lanciata dalla cartella che contiene `bruno.j
 
 **Lavorare nella GUI Bruno (desktop):** prima di aprire qualunque `.bru`, **seleziona l'environment "local"** dal dropdown in alto a destra. Senza un environment attivo, la GUI non riesce a risolvere `{{baseUrl}}` e inietta automaticamente un blocco `vars:pre-request { baseUrl: http://localhost:8000 }` nei file aperti — che diventa un override hardcoded e rompe il run da CLI. Con l'env attivo la GUI rispetta `{{baseUrl}}` e non altera i file. Se vedi `vars:pre-request` ricomparsi in `git status`, hai aperto un file senza env selezionato: rimuovili prima del commit.
 
+**Secret nella GUI Bruno (Windows + WSL):** la GUI desktop gira come app Windows (Electron) e **non eredita** le env vars del terminale WSL — `bru.getProcessEnv(...)` ritorna `undefined`. Per ogni secret consumato dai pre-script (es. `webhookSecret`) configurare una **secret env var** nell'environment dalla GUI: matita su "local" → Add Variable → nome, valore, spunta "Secret" → Save. Bruno la salva fuori dal repo (gitignored). I pre-script convenzionalmente fanno `bru.getEnvVar('xxx') || bru.getProcessEnv('XXX')` per supportare entrambi GUI e CLI senza duplicazione.
+
 ## Testing guide per ogni feature (standard di sviluppo)
 
 A chiusura di **ogni task** consegno a Francesco un file `docs/testing/<task-slug>.md` (es. `docs/testing/w1-task2-fastapi-scaffold.md`) che contiene:
