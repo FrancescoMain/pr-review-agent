@@ -14,6 +14,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import httpx
+import structlog
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
@@ -26,13 +27,24 @@ from pr_review_agent.health import router as health_router
 from pr_review_agent.observability.logging import configure_logging
 from pr_review_agent.webhook import router as webhook_router
 
+_log = structlog.get_logger(__name__)
+
 
 def _build_runner(settings: Settings, http: httpx.AsyncClient) -> AgentRunner | None:
-    if (
-        settings.github_app_id <= 0
-        or settings.github_app_private_key_path is None
-        or not settings.anthropic_api_key.get_secret_value()
-    ):
+    if settings.github_app_id <= 0:
+        _log.warning("agent runner disabled: GITHUB_APP_ID not set")
+        return None
+    if settings.github_app_private_key_path is None:
+        _log.warning("agent runner disabled: GITHUB_APP_PRIVATE_KEY_PATH not set")
+        return None
+    if not settings.github_app_private_key_path.exists():
+        _log.warning(
+            "agent runner disabled: GitHub App private key file not found",
+            path=str(settings.github_app_private_key_path),
+        )
+        return None
+    if not settings.anthropic_api_key.get_secret_value():
+        _log.warning("agent runner disabled: ANTHROPIC_API_KEY not set")
         return None
     pem = settings.github_app_private_key_path.read_text(encoding="utf-8")
     auth = GitHubAppAuth(app_id=settings.github_app_id, private_key=pem, http_client=http)
