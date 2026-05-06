@@ -24,13 +24,13 @@ WORKDIR /app
 
 # Lock files first so dependency resolution is cached when only sources change.
 COPY pyproject.toml uv.lock ./
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,id=uv-cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --no-dev
 
 # Now copy the package + project metadata and install the project itself.
 COPY src ./src
 COPY README.md README.it.md ./
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,id=uv-cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
 
@@ -62,5 +62,7 @@ COPY README.md README.it.md ./
 ENV PORT=8000
 EXPOSE 8000
 
-# Runtime entry point. `$PORT` expansion needs sh, so we use the shell form.
-CMD uv run --no-sync uvicorn pr_review_agent.main:app --host 0.0.0.0 --port ${PORT}
+# Runtime entry point. The .venv is already on PATH (see ENV above), so we
+# call uvicorn directly — no `uv run`, no extra binary needed in runtime.
+# `$PORT` expansion needs sh, so we use the shell form.
+CMD uvicorn pr_review_agent.main:app --host 0.0.0.0 --port ${PORT}
