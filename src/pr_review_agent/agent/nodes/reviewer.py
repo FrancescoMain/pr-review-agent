@@ -86,6 +86,8 @@ def make_reviewer_node(
             else "(none)"
         )
 
+        critic_block = _format_critic_feedback(state)
+
         result: ReviewResult = await chain.ainvoke(
             {
                 "pr_number": state["pr_number"],
@@ -97,15 +99,54 @@ def make_reviewer_node(
                 "gathered": gathered_block,
                 "linked_issues": linked_issues_block,
                 "diff": diff,
+                "critic_feedback": critic_block,
             }
         )
 
-        return {
+        update: dict[str, Any] = {
             "review": _truncate_inline(result, max_inline_comments),
             "raw_diff": diff,
         }
+        # If we're being re-run after a critic verdict, increment the retry count
+        # so the graph's _route_after_critic eventually breaks the loop.
+        if state.get("critic_verdict") is not None:
+            update["retry_count"] = int(state.get("retry_count") or 0) + 1
+        return update
 
     return reviewer_node
+
+
+def _format_critic_feedback(state: AgentState) -> str:
+    """Render the previous critic verdict as a human-readable block for the prompt.
+
+    Empty string when there's no prior critic — first-pass review.
+    """
+    verdict = state.get("critic_verdict")
+    previous = state.get("review")
+    if verdict is None or previous is None:
+        return "(this is the first review attempt; no critic feedback yet)"
+    parts = [
+        "A previous draft was reviewed by the Critic. Address these concerns in this attempt:",
+        "",
+        "Concerns:",
+        *(f"- {c}" for c in verdict.concerns),
+    ]
+    if verdict.should_drop_inline:
+        parts.append("")
+        parts.append("Inline comments the Critic flagged for removal:")
+        parts.extend(
+            f"- {c.severity.value} `{c.path}:{c.line}` — {c.body}"
+            for c in verdict.should_drop_inline
+        )
+    if verdict.revised_overall_comment:
+        parts.append("")
+        parts.append("Suggested rewrite of the overall comment (not binding):")
+        parts.append(verdict.revised_overall_comment)
+    parts.append("")
+    parts.append("Previous draft for reference:")
+    parts.append(f"approval: {previous.approval.value}")
+    parts.append(f"overall: {previous.overall_comment}")
+    return "\n".join(parts)
 
 
 def make_default_review_chain_factory(
@@ -128,6 +169,7 @@ def make_default_review_chain_factory(
                 "Triage: change_type={change_type}, risk={risk_level}, depth={review_depth}.\n\n"
                 "Gathered context:\n{gathered}\n\n"
                 "Linked issues:\n{linked_issues}\n\n"
+                "Critic feedback:\n{critic_feedback}\n\n"
                 "Unified diff:\n```diff\n{diff}\n```",
             ),
         ]

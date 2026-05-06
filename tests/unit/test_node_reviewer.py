@@ -125,6 +125,51 @@ async def test_reviewer_passes_diff_and_context_to_chain() -> None:
     assert "dark mode req" in captured["linked_issues"]
     assert captured["risk_level"] == "medium"
     assert captured["change_type"] == "feature"
+    # First-pass review: critic_feedback block is "no critic feedback yet".
+    assert "first review attempt" in captured["critic_feedback"]
+
+
+async def test_reviewer_includes_critic_feedback_on_retry() -> None:
+    """When critic_verdict is set, prompt input gets prior concerns + previous draft."""
+    from pr_review_agent.agent.models import CriticVerdict, VerdictKind
+
+    captured: dict[str, Any] = {}
+
+    async def capture(inputs: dict[str, Any]) -> ReviewResult:
+        captured.update(inputs)
+        return _baseline_review()
+
+    state = _state(
+        critic_verdict=CriticVerdict(
+            verdict=VerdictKind.revise,
+            concerns=["drop the comment on cache.py:42 — it's about a line that wasn't changed"],
+            revised_overall_comment="Try this overall instead.",
+        ),
+        review=_baseline_review(),
+    )
+    client = _RecordingClient()
+    node = make_reviewer_node(
+        github_client=client,  # type: ignore[arg-type]
+        chain_factory=lambda _risk: RunnableLambda(capture),
+    )
+    update = await node(state)
+
+    feedback = captured["critic_feedback"]
+    assert "Address these concerns" in feedback
+    assert "cache.py:42" in feedback
+    assert "Try this overall instead" in feedback
+    # retry_count must be incremented so the graph can break the loop.
+    assert update["retry_count"] == 1
+
+
+async def test_reviewer_does_not_increment_retry_count_on_first_pass() -> None:
+    client = _RecordingClient()
+    node = make_reviewer_node(
+        github_client=client,  # type: ignore[arg-type]
+        chain_factory=lambda _risk: _fixed_chain(_baseline_review()),
+    )
+    update = await node(_state())
+    assert "retry_count" not in update
 
 
 # ---------------------------- model routing ----------------------------

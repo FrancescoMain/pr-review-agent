@@ -109,3 +109,32 @@ class ReviewResult(BaseModel):
         default=ApprovalLevel.comment,
         description="Recommendation: approve / comment / request_changes",
     )
+
+
+class VerdictKind(StrEnum):
+    accept = "accept"
+    revise = "revise"
+
+
+class CriticVerdict(BaseModel):
+    """Output of the Critic node.
+
+    Combines a deterministic validation pass (line numbers that don't
+    line up with the diff are added to ``should_drop_inline`` even if
+    the LLM didn't flag them) with an LLM judgement on tone, scope,
+    and severity calibration.
+    """
+
+    verdict: VerdictKind = Field(description="accept = ship; revise = send back to Reviewer")
+    concerns: list[str] = Field(
+        default_factory=list[str],
+        description="Short bullet-list of issues; max ~5 entries",
+    )
+    should_drop_inline: list[InlineComment] = Field(
+        default_factory=list[InlineComment],
+        description="Inline comments the Critic judges spurious; Publisher removes them",
+    )
+    revised_overall_comment: str | None = Field(
+        default=None,
+        description="Optional rewrite of the overall comment; the Reviewer reads it as a hint",
+    )

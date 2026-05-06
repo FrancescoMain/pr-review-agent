@@ -290,3 +290,53 @@ async def test_publisher_review_takes_priority_over_skip_flag(state: AgentState)
     assert "Skipped review" not in update["final_comment"]
     assert len(client.reviews) == 1
     assert client.comments == []
+
+
+async def test_publisher_drops_inline_flagged_by_critic(state: AgentState) -> None:
+    """Critic.should_drop_inline removes matching inline comments before publish."""
+    from pr_review_agent.agent.models import CriticVerdict, VerdictKind
+
+    keep = InlineComment(path="src/x.py", line=2, body="keep me", severity=Severity.nit)
+    drop = InlineComment(path="src/y.py", line=99, body="drop me", severity=Severity.issue)
+
+    state["raw_diff"] = _DIFF_X_Y
+    state["review"] = ReviewResult(
+        overall_comment="overall",
+        inline_comments=[keep, drop],
+        approval=ApprovalLevel.comment,
+    )
+    state["critic_verdict"] = CriticVerdict(verdict=VerdictKind.accept, should_drop_inline=[drop])
+    client = _RecordingClient()
+    node = make_publisher_node(client)  # type: ignore[arg-type]
+
+    await node(state)
+
+    posted = client.reviews[0]
+    # The dropped inline must NOT appear in the body or in the inline comments list.
+    assert "drop me" not in posted["body"]
+    assert all("drop me" not in c["body"] for c in posted["comments"])
+    assert any("keep me" in c["body"] for c in posted["comments"])
+
+
+async def test_publisher_keeps_review_unchanged_when_critic_drops_nothing(
+    state: AgentState,
+) -> None:
+    """No drops in the verdict → review goes through untouched."""
+    from pr_review_agent.agent.models import CriticVerdict, VerdictKind
+
+    state["raw_diff"] = _DIFF_X_Y
+    state["review"] = ReviewResult(
+        overall_comment="overall",
+        inline_comments=[
+            InlineComment(path="src/x.py", line=2, body="keep", severity=Severity.nit),
+        ],
+        approval=ApprovalLevel.comment,
+    )
+    state["critic_verdict"] = CriticVerdict(verdict=VerdictKind.accept)
+
+    client = _RecordingClient()
+    node = make_publisher_node(client)  # type: ignore[arg-type]
+    await node(state)
+
+    posted = client.reviews[0]
+    assert any("keep" in c["body"] for c in posted["comments"])

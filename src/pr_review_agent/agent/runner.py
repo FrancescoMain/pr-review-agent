@@ -38,6 +38,10 @@ from pr_review_agent.agent.graph import build_graph
 from pr_review_agent.agent.memory.store import ConventionStore
 from pr_review_agent.agent.models import TriageDecision
 from pr_review_agent.agent.nodes.context_gatherer import make_context_gatherer_node
+from pr_review_agent.agent.nodes.critic import (
+    make_critic_node,
+    make_default_critic_chain_factory,
+)
 from pr_review_agent.agent.nodes.publisher import make_publisher_node
 from pr_review_agent.agent.nodes.reviewer import (
     make_default_review_chain_factory,
@@ -108,6 +112,11 @@ def make_default_runner(
         chain_factory=review_chain_factory,
     )
 
+    critic_chain_factory = make_default_critic_chain_factory(
+        anthropic_api_key=anthropic_api_key,
+    )
+    critic = make_critic_node(chain_factory=critic_chain_factory)
+
     gatherer_llm = ChatAnthropic(
         model_name=_GATHERER_MODEL,
         api_key=anthropic_api_key,  # type: ignore[arg-type]
@@ -167,6 +176,7 @@ def make_default_runner(
                     triage=triage,
                     context_gatherer=gatherer,
                     reviewer=reviewer,
+                    critic=critic,
                     publisher=publisher,
                 )
                 config: dict[str, Any] = {"callbacks": [cost_cb]}

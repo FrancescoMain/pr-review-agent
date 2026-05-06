@@ -137,9 +137,28 @@ def make_publisher_node(client: GitHubClient) -> PublisherNode:
     return publisher_node
 
 
+def _apply_critic_drops(review: ReviewResult, state: AgentState) -> ReviewResult:
+    """Remove inline comments the Critic flagged (silently — trace lives in LangSmith).
+
+    Match by ``(path, line, body)`` — the same identity the Critic uses
+    when populating ``should_drop_inline``. Anything else passes through
+    unchanged. We don't touch ``approval`` even if the count of
+    blockers drops to zero; that's the Reviewer's call, not ours.
+    """
+    verdict = state.get("critic_verdict")
+    if verdict is None or not verdict.should_drop_inline:
+        return review
+    drop_keys = {(c.path, c.line, c.body) for c in verdict.should_drop_inline}
+    kept = [c for c in review.inline_comments if (c.path, c.line, c.body) not in drop_keys]
+    if len(kept) == len(review.inline_comments):
+        return review
+    return review.model_copy(update={"inline_comments": kept})
+
+
 async def _publish_review(
     client: GitHubClient, state: AgentState, review: ReviewResult
 ) -> dict[str, Any]:
+    review = _apply_critic_drops(review, state)
     raw_diff = state.get("raw_diff") or ""
     allowed = parse_post_lines(raw_diff) if raw_diff else {}
     anchorable, non_anchorable = _split_inline_by_anchorability(review.inline_comments, allowed)

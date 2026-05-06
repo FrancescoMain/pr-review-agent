@@ -12,7 +12,12 @@ from typing import NotRequired, TypedDict
 
 from langchain_core.messages import BaseMessage
 
-from pr_review_agent.agent.models import GatheredContext, ReviewResult, TriageDecision
+from pr_review_agent.agent.models import (
+    CriticVerdict,
+    GatheredContext,
+    ReviewResult,
+    TriageDecision,
+)
 
 
 class AgentState(TypedDict):
@@ -29,6 +34,8 @@ class AgentState(TypedDict):
     tool_calls_used: NotRequired[int]
     review: NotRequired[ReviewResult | None]
     raw_diff: NotRequired[str | None]
+    critic_verdict: NotRequired[CriticVerdict | None]
+    retry_count: NotRequired[int]
     final_comment: NotRequired[str | None]
     tokens_used: NotRequired[dict[str, int]]
     errors: NotRequired[list[str]]
