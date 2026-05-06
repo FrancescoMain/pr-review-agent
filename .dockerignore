@@ -1,0 +1,54 @@
+# Mirror .gitignore for things that have no business in the image, plus a
+# few extras (tests, eval, bruno, docs) that are pure dev-time assets.
+
+# Python / uv
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+dist/
+.venv/
+.python-version.local
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.pyright/
+.coverage
+.coverage.*
+htmlcov/
+
+# Environment / secrets — NEVER ship .env into an image
+.env
+.env.*
+!.env.example
+*.pem
+
+# Local services data
+postgres_data/
+qdrant_data/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Claude Code
+.claude/
+
+# Sentence-transformers / HF cache (gets re-populated via volume)
+.cache/
+
+# Eval reports + test artefacts (not needed at runtime)
+eval/reports/
+
+# Dev-only: keep the runtime image lean
+tests/
+bruno/
+docs/
+.github/
+
+# Misc
+.git/
+.gitignore

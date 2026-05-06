@@ -66,19 +66,16 @@ def _build_runner(
     if settings.github_app_id <= 0:
         _log.warning("agent runner disabled: GITHUB_APP_ID not set")
         return None
-    if settings.github_app_private_key_path is None:
-        _log.warning("agent runner disabled: GITHUB_APP_PRIVATE_KEY_PATH not set")
-        return None
-    if not settings.github_app_private_key_path.exists():
+    pem = settings.resolve_github_app_private_key()
+    if pem is None:
         _log.warning(
-            "agent runner disabled: GitHub App private key file not found",
-            path=str(settings.github_app_private_key_path),
+            "agent runner disabled: neither GITHUB_APP_PRIVATE_KEY_PATH "
+            "nor GITHUB_APP_PRIVATE_KEY_PEM is set / readable"
         )
         return None
     if not settings.anthropic_api_key.get_secret_value():
         _log.warning("agent runner disabled: ANTHROPIC_API_KEY not set")
         return None
-    pem = settings.github_app_private_key_path.read_text(encoding="utf-8")
     auth = GitHubAppAuth(app_id=settings.github_app_id, private_key=pem, http_client=http)
     github_client = GitHubClient(
         auth=auth,

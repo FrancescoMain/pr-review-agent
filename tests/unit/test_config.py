@@ -120,5 +120,65 @@ def test_settings_validator_rejects_missing_credentials_in_production(
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.delenv("GITHUB_APP_ID", raising=False)
     monkeypatch.delenv("GITHUB_APP_PRIVATE_KEY_PATH", raising=False)
+    monkeypatch.delenv("GITHUB_APP_PRIVATE_KEY_PEM", raising=False)
     with pytest.raises(ValidationError):
         Settings(_env_file=None)  # type: ignore[call-arg]
+
+
+def test_settings_accepts_pem_inline_in_production(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The deploy path: provide the PEM directly via env var, no path needed."""
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("GITHUB_APP_ID", "123456")
+    monkeypatch.delenv("GITHUB_APP_PRIVATE_KEY_PATH", raising=False)
+    monkeypatch.setenv(
+        "GITHUB_APP_PRIVATE_KEY_PEM",
+        "-----BEGIN RSA PRIVATE KEY-----\nfake\n-----END RSA PRIVATE KEY-----\n",
+    )
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.github_app_private_key_pem is not None
+    pem = settings.resolve_github_app_private_key()
+    assert pem is not None
+    assert "BEGIN RSA PRIVATE KEY" in pem
+
+
+def test_resolve_pem_prefers_inline_over_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """When both inline and path are set, inline wins (the deploy override)."""
+    file_pem = tmp_path / "from-file.pem"
+    file_pem.write_text(
+        "-----BEGIN RSA PRIVATE KEY-----\nfromfile\n-----END RSA PRIVATE KEY-----\n"
+    )
+    monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY_PATH", str(file_pem))
+    monkeypatch.setenv(
+        "GITHUB_APP_PRIVATE_KEY_PEM",
+        "-----BEGIN RSA PRIVATE KEY-----\nfrominline\n-----END RSA PRIVATE KEY-----\n",
+    )
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    pem = settings.resolve_github_app_private_key()
+    assert pem is not None
+    assert "frominline" in pem
+    assert "fromfile" not in pem
+
+
+def test_resolve_pem_falls_back_to_path_when_inline_empty(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    file_pem = tmp_path / "from-file.pem"
+    file_pem.write_text(
+        "-----BEGIN RSA PRIVATE KEY-----\nfromfile\n-----END RSA PRIVATE KEY-----\n"
+    )
+    monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY_PATH", str(file_pem))
+    monkeypatch.delenv("GITHUB_APP_PRIVATE_KEY_PEM", raising=False)
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    pem = settings.resolve_github_app_private_key()
+    assert pem is not None
+    assert "fromfile" in pem
+
+
+def test_resolve_pem_returns_none_when_neither_is_usable() -> None:
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.resolve_github_app_private_key() is None

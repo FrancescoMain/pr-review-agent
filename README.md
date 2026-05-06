@@ -91,6 +91,14 @@ Open a PR on a repo where your App is installed; the review appears in ~60s.
 
 See [SETUP.md](./SETUP.md) for the full GitHub App walkthrough (App creation, webhook URL, installation, ngrok static domain).
 
+## Deploy
+
+The repo ships a multi-stage `Dockerfile` and a step-by-step guide for going to production:
+
+- **[docs/deploy-railway.md](./docs/deploy-railway.md)** — Railway + Qdrant Cloud, ~30 min setup, ~$10/month + per-PR Anthropic spend.
+
+Settings accept the GitHub App private key either as a file path (local dev) or inline in `GITHUB_APP_PRIVATE_KEY_PEM` (Railway/Fly secrets) — the resolver prefers inline. The same image runs unchanged on Fly.io, Render, or your own host.
+
 ## Costs
 
 Numbers from real end-to-end runs on small Python PRs (≈20 lines changed, 1 file):

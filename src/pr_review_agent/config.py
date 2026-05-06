@@ -38,7 +38,12 @@ class Settings(BaseSettings):
 
     github_webhook_secret: SecretStr = SecretStr("")
     github_app_id: int = 0
+    # The PEM key can be supplied either as a file path (local dev) or as the
+    # raw multi-line PEM contents in an env var (Railway/Fly/Docker deploys
+    # where mounting a file is awkward). At least one of the two MUST be set
+    # outside development.
     github_app_private_key_path: Path | None = None
+    github_app_private_key_pem: SecretStr | None = None
     anthropic_api_key: SecretStr = SecretStr("")
 
     langsmith_tracing: bool = False
@@ -77,11 +82,36 @@ class Settings(BaseSettings):
         if self.environment != "development":
             if self.github_app_id <= 0:
                 raise ValueError("github_app_id must be a positive integer outside development")
-            if self.github_app_private_key_path is None:
-                raise ValueError("github_app_private_key_path must be set outside development")
+            if self.github_app_private_key_path is None and (
+                self.github_app_private_key_pem is None
+                or not self.github_app_private_key_pem.get_secret_value()
+            ):
+                raise ValueError(
+                    "either github_app_private_key_path or github_app_private_key_pem "
+                    "must be set outside development"
+                )
             if not self.anthropic_api_key.get_secret_value():
                 raise ValueError("anthropic_api_key must be set outside development")
         return self
+
+    def resolve_github_app_private_key(self) -> str | None:
+        """Return the PEM contents from whichever source is set, or None.
+
+        The inline env var wins over the path when both are supplied — useful
+        when promoting a deployed service to a new key without touching the
+        filesystem.
+        """
+        if (
+            self.github_app_private_key_pem is not None
+            and self.github_app_private_key_pem.get_secret_value()
+        ):
+            return self.github_app_private_key_pem.get_secret_value()
+        if (
+            self.github_app_private_key_path is not None
+            and self.github_app_private_key_path.exists()
+        ):
+            return self.github_app_private_key_path.read_text(encoding="utf-8")
+        return None
 
 
 @lru_cache(maxsize=1)
