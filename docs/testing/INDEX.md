@@ -23,6 +23,7 @@ Una guida per task. Ogni voce racconta cosa è stato consegnato, come testarlo a
 | 3 | 4 — Ingest convenzioni in Qdrant (CLI) | [w3-task4-qdrant-ingest.md](./w3-task4-qdrant-ingest.md) | ✅ |
 | 3 | 5 — Tool `recall_conventions` esposto al Gatherer | [w3-task5-recall-conventions.md](./w3-task5-recall-conventions.md) | ✅ |
 | 3 | 6 — Nodo Critic + retry edge | [w3-task6-critic-retry.md](./w3-task6-critic-retry.md) | ✅ |
+| 3 | 7 — Eval suite su PR reali | [w3-task7-eval-suite.md](./w3-task7-eval-suite.md) | ✅ |
 
 ## Convenzioni
 

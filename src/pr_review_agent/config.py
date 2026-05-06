@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     ]
     convention_recall_top_k: int = 5
 
+    # W3-Task7 eval harness: when an entry in eval/dataset.yaml omits
+    # installation_id, the runner falls back to this. Useful so the
+    # dataset doesn't have to hard-code a personal installation id.
+    github_default_installation_id: int | None = None
+
     @model_validator(mode="after")
     def _require_credentials_outside_dev(self) -> Self:
         if self.environment != "development":
