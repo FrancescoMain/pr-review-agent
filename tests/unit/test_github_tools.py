@@ -76,7 +76,13 @@ def _build_client(http: httpx.AsyncClient, pem: str) -> GitHubClient:
 
 
 def _ctx() -> PRContext:
-    return PRContext(repo=REPO, pr_number=PR_NUMBER, installation_id=INSTALLATION_ID)
+    return PRContext(
+        repo=REPO,
+        pr_number=PR_NUMBER,
+        installation_id=INSTALLATION_ID,
+        head_ref="feat/test",
+        head_sha="0" * 40,
+    )
 
 
 def _find_tool(tools: list[BaseTool], name: str) -> BaseTool:

@@ -30,3 +30,18 @@ class GitHubNotFoundError(GitHubAPIError):
     (e.g. an issue referenced by ``Closes #42`` that no longer exists)
     catch this narrower type.
     """
+
+
+class RepoCloneError(GitHubError):
+    """``git clone`` / ``git fetch`` / ``git checkout`` failed during checkout setup."""
+
+
+class ToolPathError(Exception):
+    """Filesystem tool was given a path that escapes the checkout root or doesn't exist.
+
+    Lives outside ``GitHubError`` because it's about the agent's *tool
+    contract*, not about GitHub itself: the LLM tried to read
+    ``../../etc/passwd``, asked for a file that isn't there, or hit the
+    bounded-read limit. Callers can surface this back to the model as a
+    tool error message without confusing it with API failures.
+    """
