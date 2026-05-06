@@ -22,16 +22,19 @@ ENV UV_LINK_MODE=copy \
 
 WORKDIR /app
 
-# Lock files first so dependency resolution is cached when only sources change.
+# NOTE: we don't use `--mount=type=cache` here. Railway's BuildKit fork
+# requires a non-standard `cacheKey/<id>` prefix that breaks portability
+# on every other builder. `uv sync` against a frozen lockfile is already
+# fast enough (~30s cold, bytecode pre-compiled via UV_COMPILE_BYTECODE)
+# that the cache isn't worth the cross-builder fragility. Layer caching
+# still kicks in when `uv.lock` doesn't change.
 COPY pyproject.toml uv.lock ./
-RUN --mount=type=cache,id=uv-cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project --no-dev
+RUN uv sync --frozen --no-install-project --no-dev
 
 # Now copy the package + project metadata and install the project itself.
 COPY src ./src
 COPY README.md README.it.md ./
-RUN --mount=type=cache,id=uv-cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev
 
 
 # ---- runtime ----
