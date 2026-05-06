@@ -12,6 +12,7 @@ Una guida per task. Ogni voce racconta cosa è stato consegnato, come testarlo a
 | 1 | 7 — LangSmith tracing + GitHub Actions CI | [w1-task7-langsmith-and-ci.md](./w1-task7-langsmith-and-ci.md) | ✅ |
 | 2 | 1 — Tool GitHub-side (`get_pr_diff`, `get_linked_issues`) | [w2-task1-github-tools.md](./w2-task1-github-tools.md) | ✅ |
 | 2 | 2 — Tool filesystem (`read_file`, `list_directory`, `search_code`) + `RepoCheckout` | [w2-task2-filesystem-tools.md](./w2-task2-filesystem-tools.md) | ✅ |
+| 2 | 3 — Nodo Context Gatherer (sub-grafo `model_step` + `tool_step`) | [w2-task3-context-gatherer.md](./w2-task3-context-gatherer.md) | ✅ |
 
 ## Convenzioni
 

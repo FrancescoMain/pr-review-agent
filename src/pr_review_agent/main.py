@@ -71,6 +71,7 @@ def _build_runner(settings: Settings, http: httpx.AsyncClient) -> AgentRunner | 
     return make_default_runner(
         anthropic_api_key=settings.anthropic_api_key.get_secret_value(),
         github_client=github_client,
+        github_auth=auth,
     )
 
 

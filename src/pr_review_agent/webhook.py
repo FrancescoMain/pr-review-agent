@@ -82,6 +82,8 @@ async def github_webhook(
         "pr_title": pr_event.pull_request.title,
         "pr_body": pr_event.pull_request.body or "",
         "installation_id": pr_event.installation.id,
+        "head_ref": pr_event.pull_request.head.ref,
+        "head_sha": pr_event.pull_request.head.sha,
         "tokens_used": {},
         "errors": [],
     }

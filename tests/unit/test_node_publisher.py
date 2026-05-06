@@ -37,6 +37,8 @@ def state() -> AgentState:
         "repo": "francesco/playground",
         "pr_number": 42,
         "installation_id": 99,
+        "head_ref": "feat/x",
+        "head_sha": "0" * 40,
         "triage": TriageDecision(change_type=ChangeType.docs, risk_level=RiskLevel.low),
     }
 
@@ -63,5 +65,14 @@ async def test_publisher_includes_triage_in_comment(state: AgentState) -> None:
 async def test_publisher_falls_back_when_triage_missing() -> None:
     client = _RecordingClient()
     node = make_publisher_node(client)  # type: ignore[arg-type]
-    update = await node({"repo": "x/y", "pr_number": 1, "installation_id": 2, "triage": None})
+    update = await node(
+        {
+            "repo": "x/y",
+            "pr_number": 1,
+            "installation_id": 2,
+            "head_ref": "feat/x",
+            "head_sha": "0" * 40,
+            "triage": None,
+        }
+    )
     assert "no triage" in update["final_comment"].lower()

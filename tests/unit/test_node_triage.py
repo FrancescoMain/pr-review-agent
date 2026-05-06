@@ -35,6 +35,8 @@ def _base_state(**overrides: Any) -> AgentState:
         "repo": "x/y",
         "pr_number": 1,
         "installation_id": 1,
+        "head_ref": "feat/x",
+        "head_sha": "0" * 40,
         "pr_title": "Add dark mode",
         "pr_body": "Implements toggle",
     }

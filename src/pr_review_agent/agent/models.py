@@ -9,6 +9,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
+from pr_review_agent.agent.tools.models import LinkedIssue
+
 
 class ChangeType(StrEnum):
     feature = "feature"
@@ -41,4 +43,28 @@ class TriageDecision(BaseModel):
     should_skip: bool = Field(
         default=False,
         description="True only for trivial changes that explicitly do not need review",
+    )
+
+
+class GatheredContext(BaseModel):
+    """What the Context Gatherer hands off to the Reviewer.
+
+    Filled by the model via the ``final_answer`` tool at the end of the
+    gathering loop. Kept deliberately small so the Reviewer's prompt
+    stays bounded; the raw diff and tool messages live in the graph
+    state for trace/debug, not in the prompt.
+    """
+
+    summary: str = Field(description="Plain-English description of what the PR does")
+    relevant_files: list[str] = Field(
+        default_factory=list,
+        description="Repo-relative paths the gatherer found worth reading",
+    )
+    linked_issues: list[LinkedIssue] = Field(
+        default_factory=list[LinkedIssue],
+        description="Issues referenced via Closes/Fixes/Resolves and successfully fetched",
+    )
+    notes: str = Field(
+        default="",
+        description="Open questions or caveats the Reviewer should keep in mind",
     )
