@@ -18,6 +18,7 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
+import structlog
 from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -115,7 +116,14 @@ def make_default_runner(
                 reviewer=reviewer,
                 publisher=publisher,
             )
-            result: Any = await graph.ainvoke(state)
+            cid = structlog.contextvars.get_contextvars().get("correlation_id")
+            config: dict[str, Any] = {}
+            if cid is not None:
+                config = {
+                    "metadata": {"correlation_id": cid},
+                    "tags": [f"correlation:{cid}"],
+                }
+            result: Any = await graph.ainvoke(state, config=config)
             return AgentState(**result)
 
     return run

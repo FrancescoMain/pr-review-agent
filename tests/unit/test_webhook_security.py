@@ -65,6 +65,41 @@ def test_valid_signature_pull_request_returns_202(client: TestClient) -> None:
     assert data["pr"] == 42
     assert data["repo"] == "francesco/playground"
     assert data["installation_id"] == 99
+    # delivery_id present even when GitHub didn't send one (uuid fallback).
+    assert isinstance(data["delivery_id"], str)
+    assert data["delivery_id"]
+
+
+def test_response_echoes_x_github_delivery_header(client: TestClient) -> None:
+    body = json.dumps(_pr_payload()).encode()
+    response = client.post(
+        "/webhook/github",
+        content=body,
+        headers={
+            "X-GitHub-Event": "pull_request",
+            "X-GitHub-Delivery": "abc-123-from-github",
+            "X-Hub-Signature-256": _sign(body),
+            "Content-Type": "application/json",
+        },
+    )
+    assert response.status_code == 202
+    assert response.json()["delivery_id"] == "abc-123-from-github"
+
+
+def test_ignored_event_response_includes_delivery_id(client: TestClient) -> None:
+    body = json.dumps({"zen": "Practicality beats purity."}).encode()
+    response = client.post(
+        "/webhook/github",
+        content=body,
+        headers={
+            "X-GitHub-Event": "ping",
+            "X-GitHub-Delivery": "ping-1",
+            "X-Hub-Signature-256": _sign(body),
+            "Content-Type": "application/json",
+        },
+    )
+    assert response.status_code == 202
+    assert response.json()["delivery_id"] == "ping-1"
 
 
 def test_missing_signature_returns_401(client: TestClient) -> None:
@@ -165,3 +200,32 @@ def test_webhook_schedules_agent_run(client: TestClient, monkeypatch: pytest.Mon
     assert captured["repo"] == "francesco/playground"
     assert captured["pr_number"] == 42
     assert captured["installation_id"] == 99
+
+
+def test_background_task_binds_correlation_id_for_logs(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Inside the background task, structlog must see correlation_id bound."""
+    import structlog
+
+    seen: dict[str, object] = {}
+
+    async def _runner_that_inspects_contextvars(state: dict[str, object]) -> dict[str, object]:
+        seen.update(structlog.contextvars.get_contextvars())
+        return state
+
+    client.app.state.agent_runner = _runner_that_inspects_contextvars  # type: ignore[attr-defined]
+
+    body = json.dumps(_pr_payload()).encode()
+    response = client.post(
+        "/webhook/github",
+        content=body,
+        headers={
+            "X-GitHub-Event": "pull_request",
+            "X-GitHub-Delivery": "delivery-xyz",
+            "X-Hub-Signature-256": _sign(body),
+            "Content-Type": "application/json",
+        },
+    )
+    assert response.status_code == 202
+    assert seen.get("correlation_id") == "delivery-xyz"

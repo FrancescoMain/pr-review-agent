@@ -14,6 +14,15 @@ Pipeline for an incoming delivery:
      errors in the background task are caught and logged via structlog
      so they never propagate to the GitHub delivery.
 
+Every delivery binds a ``correlation_id`` (the ``X-GitHub-Delivery``
+header from GitHub, or a uuid fallback) on structlog's contextvars
+scope. The 202 response echoes ``delivery_id`` so the caller can
+copy-paste it to grep logs / filter LangSmith traces. The background
+task re-binds the correlation explicitly — contextvars normally
+propagate into ``asyncio.create_task``, but we're defensive: a
+mistakenly-shared task or a future framework change shouldn't silently
+drop our id.
+
 The 202 is the contract GitHub expects: acknowledge fast, do the work
 asynchronously.
 """
@@ -30,13 +39,18 @@ from pr_review_agent.agent.state import AgentState
 from pr_review_agent.config import Settings, get_settings
 from pr_review_agent.github.models import PullRequestEvent
 from pr_review_agent.github.signatures import verify_signature
+from pr_review_agent.observability.correlation import (
+    bind_correlation_id,
+    clear_correlation,
+)
 
 router = APIRouter(tags=["webhook"])
 
 _log = structlog.get_logger(__name__)
 
 
-async def _run_agent_safely(runner: AgentRunner, state: AgentState) -> None:
+async def _run_agent_safely(runner: AgentRunner, state: AgentState, *, correlation_id: str) -> None:
+    bind_correlation_id(request_id=correlation_id)
     try:
         await runner(state)
     except Exception:
@@ -46,6 +60,8 @@ async def _run_agent_safely(runner: AgentRunner, state: AgentState) -> None:
             pr_number=state.get("pr_number"),
             installation_id=state.get("installation_id"),
         )
+    finally:
+        clear_correlation()
 
 
 @router.post("/webhook/github", status_code=status.HTTP_202_ACCEPTED)
@@ -54,6 +70,8 @@ async def github_webhook(
     background_tasks: BackgroundTasks,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, Any]:
+    delivery_id = bind_correlation_id(request_id=request.headers.get("X-GitHub-Delivery"))
+
     body = await request.body()
     verify_signature(
         body=body,
@@ -69,7 +87,11 @@ async def github_webhook(
         raise HTTPException(status_code=400, detail="body is not valid JSON") from exc
 
     if event != "pull_request":
-        return {"status": "ignored", "reason": f"event not handled: {event or '<missing>'}"}
+        return {
+            "status": "ignored",
+            "reason": f"event not handled: {event or '<missing>'}",
+            "delivery_id": delivery_id,
+        }
 
     try:
         pr_event = PullRequestEvent.model_validate(payload)
@@ -96,11 +118,12 @@ async def github_webhook(
             pr_number=state["pr_number"],
         )
     else:
-        background_tasks.add_task(_run_agent_safely, runner, state)
+        background_tasks.add_task(_run_agent_safely, runner, state, correlation_id=delivery_id)
 
     return {
         "status": "accepted",
         "pr": pr_event.number,
         "repo": pr_event.repository.full_name,
         "installation_id": pr_event.installation.id,
+        "delivery_id": delivery_id,
     }
