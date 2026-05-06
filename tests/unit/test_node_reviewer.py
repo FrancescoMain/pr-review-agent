@@ -89,7 +89,7 @@ def _baseline_review() -> ReviewResult:
 
 async def test_reviewer_returns_structured_review() -> None:
     review = _baseline_review()
-    client = _RecordingClient()
+    client = _RecordingClient(diff="diff --git a/x b/x\n+++ b/x\n@@ -0,0 +1 @@\n+new\n")
     factory_calls: list[RiskLevel | None] = []
 
     def factory(risk: RiskLevel | None) -> Runnable[dict[str, Any], ReviewResult]:
@@ -100,6 +100,7 @@ async def test_reviewer_returns_structured_review() -> None:
     update = await node(_state())
 
     assert update["review"] == review
+    assert update["raw_diff"] == "diff --git a/x b/x\n+++ b/x\n@@ -0,0 +1 @@\n+new\n"
     assert factory_calls == [RiskLevel.medium]
     assert client.calls == [{"installation_id": 99, "repo": "francesco/playground", "pr_number": 7}]
 

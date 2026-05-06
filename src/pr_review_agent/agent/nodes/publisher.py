@@ -1,28 +1,41 @@
-"""Publisher node — posts the agent's verdict to the PR.
+"""Publisher node — turns the agent's verdict into a real GitHub artefact.
 
-In W2-Task4 the verdict has three shapes depending on what reached
-this node:
+After W2-Task5 the Publisher chooses one of three paths based on what
+arrived in state:
 
-1. ``review`` is set → format the ``ReviewResult`` as a single issue
-   comment with the overall summary plus a bullet list of inline
-   findings. This is transitional: W2-Task5 turns inline findings into
-   real GitHub PR review comments via ``POST /pulls/{n}/reviews``.
-2. ``triage.should_skip`` is True → post a brief "skipped" message and
-   stop. The graph routes such PRs straight here from triage.
-3. Fallback (W1 hello-world): post the triage classification only. This
-   path stays for tests/dev where the Reviewer wasn't wired in.
-
-Built via factory so tests can inject a fake ``GitHubClient``.
+1. ``review`` is set → publish a **PR review with inline comments**
+   via ``POST /pulls/{n}/reviews``. Inline comments are validated
+   against the unified diff (the Reviewer persisted ``raw_diff`` in
+   state). Comments anchored to lines that the diff actually touched
+   on the right side go through as inline; the rest are degraded to
+   bullet points in the review body so the developer still sees them.
+   If GitHub rejects the review (most commonly 422 on a stale anchor)
+   the Publisher falls back to a single issue comment with the same
+   formatted body — the review is delivered, just without the inline
+   anchors.
+2. ``triage.should_skip == True`` → post a brief "skipped" issue comment.
+3. Fallback (W1 hello-world) — used when the Reviewer wasn't wired in.
 """
 
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from pr_review_agent.agent.models import ReviewResult, Severity
+import structlog
+
+from pr_review_agent.agent.models import (
+    ApprovalLevel,
+    InlineComment,
+    ReviewResult,
+    Severity,
+)
 from pr_review_agent.agent.state import AgentState
 from pr_review_agent.github.client import GitHubClient
+from pr_review_agent.github.diff_parser import parse_post_lines
+from pr_review_agent.github.exceptions import GitHubAPIError
 
 PublisherNode = Callable[[AgentState], Awaitable[dict[str, Any]]]
+
+_log = structlog.get_logger(__name__)
 
 _SEVERITY_GLYPH: dict[Severity, str] = {
     Severity.blocker: "🛑",
@@ -31,15 +44,50 @@ _SEVERITY_GLYPH: dict[Severity, str] = {
     Severity.nit: "·",
 }
 
+_APPROVAL_TO_EVENT: dict[ApprovalLevel, str] = {
+    ApprovalLevel.approve: "APPROVE",
+    ApprovalLevel.comment: "COMMENT",
+    ApprovalLevel.request_changes: "REQUEST_CHANGES",
+}
 
-def _format_review_comment(review: ReviewResult) -> str:
+
+def _format_inline_body(comment: InlineComment) -> str:
+    glyph = _SEVERITY_GLYPH.get(comment.severity, "·")
+    return f"{glyph} **[{comment.severity.value}]** {comment.body}"
+
+
+def _split_inline_by_anchorability(
+    inline: list[InlineComment], allowed: dict[str, set[int]]
+) -> tuple[list[InlineComment], list[InlineComment]]:
+    """Return ``(anchorable, non_anchorable)`` lists preserving input order."""
+    anchorable: list[InlineComment] = []
+    non_anchorable: list[InlineComment] = []
+    for c in inline:
+        if c.line in allowed.get(c.path, set()):
+            anchorable.append(c)
+        else:
+            non_anchorable.append(c)
+    return anchorable, non_anchorable
+
+
+def _format_review_body(review: ReviewResult, non_anchorable: list[InlineComment]) -> str:
+    parts: list[str] = [f"### Review — `{review.approval.value}`", "", review.overall_comment]
+    if non_anchorable:
+        parts.append("")
+        parts.append("**Comments not anchored to a changed line:**")
+        for c in non_anchorable:
+            parts.append(f"- `{c.path}:{c.line}` — {_format_inline_body(c)}")
+    return "\n".join(parts)
+
+
+def _format_issue_comment_body(review: ReviewResult) -> str:
+    """Used both for the skip fallback and when Reviews API rejects the review."""
     parts: list[str] = [f"### Review — `{review.approval.value}`", "", review.overall_comment]
     if review.inline_comments:
         parts.append("")
         parts.append("**Inline findings:**")
         for c in review.inline_comments:
-            glyph = _SEVERITY_GLYPH.get(c.severity, "·")
-            parts.append(f"- {glyph} `{c.path}:{c.line}` — {c.body}")
+            parts.append(f"- `{c.path}:{c.line}` — {_format_inline_body(c)}")
     return "\n".join(parts)
 
 
@@ -66,19 +114,18 @@ def _format_hello_comment(state: AgentState) -> str:
     )
 
 
-def _select_comment(state: AgentState) -> str:
-    review = state.get("review")
-    if review is not None:
-        return _format_review_comment(review)
-    triage = state.get("triage")
-    if triage is not None and triage.should_skip:
-        return _format_skipped_comment(state)
-    return _format_hello_comment(state)
-
-
 def make_publisher_node(client: GitHubClient) -> PublisherNode:
     async def publisher_node(state: AgentState) -> dict[str, Any]:
-        comment = _select_comment(state)
+        review = state.get("review")
+        if review is not None:
+            return await _publish_review(client, state, review)
+
+        triage = state.get("triage")
+        if triage is not None and triage.should_skip:
+            comment = _format_skipped_comment(state)
+        else:
+            comment = _format_hello_comment(state)
+
         await client.post_pr_comment(
             installation_id=state["installation_id"],
             repo=state["repo"],
@@ -88,3 +135,50 @@ def make_publisher_node(client: GitHubClient) -> PublisherNode:
         return {"final_comment": comment}
 
     return publisher_node
+
+
+async def _publish_review(
+    client: GitHubClient, state: AgentState, review: ReviewResult
+) -> dict[str, Any]:
+    raw_diff = state.get("raw_diff") or ""
+    allowed = parse_post_lines(raw_diff) if raw_diff else {}
+    anchorable, non_anchorable = _split_inline_by_anchorability(review.inline_comments, allowed)
+
+    body = _format_review_body(review, non_anchorable)
+    api_comments: list[dict[str, Any]] = [
+        {
+            "path": c.path,
+            "line": c.line,
+            "side": "RIGHT",
+            "body": _format_inline_body(c),
+        }
+        for c in anchorable
+    ]
+    event = _APPROVAL_TO_EVENT[review.approval]
+
+    try:
+        await client.post_pr_review(
+            installation_id=state["installation_id"],
+            repo=state["repo"],
+            pr_number=state["pr_number"],
+            commit_id=state["head_sha"],
+            body=body,
+            event=event,
+            comments=api_comments,
+        )
+        return {"final_comment": body}
+    except GitHubAPIError as exc:
+        _log.warning(
+            "review_api_failed_falling_back_to_issue_comment",
+            repo=state["repo"],
+            pr_number=state["pr_number"],
+            error=str(exc),
+        )
+        fallback = _format_issue_comment_body(review)
+        await client.post_pr_comment(
+            installation_id=state["installation_id"],
+            repo=state["repo"],
+            pr_number=state["pr_number"],
+            body=fallback,
+        )
+        return {"final_comment": fallback}

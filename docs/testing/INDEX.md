@@ -14,6 +14,7 @@ Una guida per task. Ogni voce racconta cosa è stato consegnato, come testarlo a
 | 2 | 2 — Tool filesystem (`read_file`, `list_directory`, `search_code`) + `RepoCheckout` | [w2-task2-filesystem-tools.md](./w2-task2-filesystem-tools.md) | ✅ |
 | 2 | 3 — Nodo Context Gatherer (sub-grafo `model_step` + `tool_step`) | [w2-task3-context-gatherer.md](./w2-task3-context-gatherer.md) | ✅ |
 | 2 | 4 — Nodo Reviewer + skip-route post-triage | [w2-task4-reviewer.md](./w2-task4-reviewer.md) | ✅ |
+| 2 | 5 — Pubblicazione review inline via Reviews API | [w2-task5-inline-review.md](./w2-task5-inline-review.md) | ✅ |
 
 ## Convenzioni
 

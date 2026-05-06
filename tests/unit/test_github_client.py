@@ -6,6 +6,7 @@ includes the installation token, body is JSON-encoded, 4xx/5xx surface
 as ``GitHubAPIError``).
 """
 
+import json
 from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime, timedelta
 
@@ -98,4 +99,59 @@ async def test_post_pr_comment_raises_on_5xx(
     with pytest.raises(GitHubAPIError):
         await client.post_pr_comment(
             installation_id=INSTALLATION_ID, repo=REPO, pr_number=PR_NUMBER, body="hi"
+        )
+
+
+async def test_post_pr_review_sends_reviews_payload(
+    private_pem: str, http_client: httpx.AsyncClient, respx_mock: respx.MockRouter
+) -> None:
+    respx_mock.post(
+        f"https://api.github.com/app/installations/{INSTALLATION_ID}/access_tokens"
+    ).mock(return_value=_token_response())
+    reviews = respx_mock.post(
+        f"https://api.github.com/repos/{REPO}/pulls/{PR_NUMBER}/reviews"
+    ).mock(return_value=httpx.Response(200, json={"id": 12345}))
+
+    client = _build_client(http_client, private_pem)
+    await client.post_pr_review(
+        installation_id=INSTALLATION_ID,
+        repo=REPO,
+        pr_number=PR_NUMBER,
+        commit_id="abc",
+        body="overall body",
+        event="COMMENT",
+        comments=[{"path": "x.py", "line": 2, "side": "RIGHT", "body": "nit"}],
+    )
+
+    request = reviews.calls.last.request
+    payload = json.loads(request.content)
+    assert payload["commit_id"] == "abc"
+    assert payload["event"] == "COMMENT"
+    assert payload["body"] == "overall body"
+    assert payload["comments"] == [{"path": "x.py", "line": 2, "side": "RIGHT", "body": "nit"}]
+    assert request.headers["Authorization"] == "token ghs_installation"
+
+
+async def test_post_pr_review_raises_on_422(
+    private_pem: str, http_client: httpx.AsyncClient, respx_mock: respx.MockRouter
+) -> None:
+    """422 (e.g. inline anchor not in diff) surfaces as GitHubAPIError so the
+    Publisher can decide to fall back to a plain issue comment."""
+    respx_mock.post(
+        f"https://api.github.com/app/installations/{INSTALLATION_ID}/access_tokens"
+    ).mock(return_value=_token_response())
+    respx_mock.post(f"https://api.github.com/repos/{REPO}/pulls/{PR_NUMBER}/reviews").mock(
+        return_value=httpx.Response(422, json={"message": "Unprocessable Entity"})
+    )
+
+    client = _build_client(http_client, private_pem)
+    with pytest.raises(GitHubAPIError):
+        await client.post_pr_review(
+            installation_id=INSTALLATION_ID,
+            repo=REPO,
+            pr_number=PR_NUMBER,
+            commit_id="abc",
+            body="x",
+            event="COMMENT",
+            comments=[],
         )

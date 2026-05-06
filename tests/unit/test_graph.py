@@ -36,11 +36,33 @@ from pr_review_agent.agent.state import AgentState
 class _RecordingClient:
     def __init__(self) -> None:
         self.posted: list[dict[str, Any]] = []
+        self.reviews: list[dict[str, Any]] = []
 
     async def post_pr_comment(
         self, *, installation_id: int, repo: str, pr_number: int, body: str
     ) -> None:
         self.posted.append({"repo": repo, "pr": pr_number, "body": body})
+
+    async def post_pr_review(
+        self,
+        *,
+        installation_id: int,
+        repo: str,
+        pr_number: int,
+        commit_id: str,
+        body: str,
+        event: str,
+        comments: list[dict[str, Any]],
+    ) -> None:
+        self.reviews.append(
+            {
+                "repo": repo,
+                "pr": pr_number,
+                "body": body,
+                "event": event,
+                "comments": comments,
+            }
+        )
 
 
 def _fake_gatherer(ctx: GatheredContext) -> Any:
@@ -106,9 +128,11 @@ async def test_graph_runs_full_pipeline_when_not_skipped() -> None:
     assert final["triage"] == decision
     assert final["gathered_context"] == gathered
     assert final["review"] == review
-    posted_body = client.posted[0]["body"]
-    assert "Looks correct." in posted_body
-    assert "cache.py:12" in posted_body
+    # Review went through the Reviews API path. With no raw_diff in state the
+    # inline comment degrades to the body section, so we check there.
+    review_body = client.reviews[0]["body"]
+    assert "Looks correct." in review_body
+    assert "cache.py:12" in review_body
 
 
 async def test_graph_skips_gatherer_and_reviewer_when_triage_says_skip() -> None:

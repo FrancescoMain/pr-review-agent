@@ -100,7 +100,10 @@ def make_reviewer_node(
             }
         )
 
-        return {"review": _truncate_inline(result, max_inline_comments)}
+        return {
+            "review": _truncate_inline(result, max_inline_comments),
+            "raw_diff": diff,
+        }
 
     return reviewer_node
 

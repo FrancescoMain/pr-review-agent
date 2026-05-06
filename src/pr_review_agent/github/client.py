@@ -5,15 +5,13 @@ The client owns no state of its own; it composes a ``GitHubAppAuth``
 ``httpx.AsyncClient`` so tests can mock it via ``respx`` and the
 FastAPI lifespan can share one connection pool.
 
-Verbs grow alongside the agent. W1 added ``post_pr_comment`` for the
-hello-world publisher. W2-Task1 adds two read-side verbs used by the
-GitHub-side tools the Context Gatherer will call: ``get_pr_diff``
-returns the raw unified diff, ``get_issue`` fetches a single issue by
-number. Filesystem-style verbs (read_file, list_directory, search_code)
-arrive in W2-Task2.
+Verbs grow alongside the agent: ``post_pr_comment`` (W1) for issue
+comments; ``get_pr_diff`` and ``get_issue`` (W2-Task1) for the
+gatherer; ``post_pr_review`` (W2-Task5) to publish a real PR review
+with inline annotations.
 """
 
-from typing import cast
+from typing import Any, cast
 
 import httpx
 
@@ -77,3 +75,38 @@ class GitHubClient:
                 f"unexpected payload shape for {repo}#{issue_number}: {type(payload).__name__}"
             )
         return cast(dict[str, object], payload)
+
+    async def post_pr_review(
+        self,
+        *,
+        installation_id: int,
+        repo: str,
+        pr_number: int,
+        commit_id: str,
+        body: str,
+        event: str,
+        comments: list[dict[str, Any]],
+    ) -> None:
+        """Publish a PR review with inline annotations.
+
+        ``event`` is one of ``"COMMENT"`` / ``"APPROVE"`` / ``"REQUEST_CHANGES"``.
+        ``comments`` items shape (see GitHub Reviews API):
+            ``{"path": str, "line": int, "side": "RIGHT", "body": str}``.
+
+        4xx (notably 422 when an inline anchor doesn't match the diff)
+        surfaces as ``GitHubAPIError`` so the Publisher can fall back
+        to a plain issue comment without retrying.
+        """
+        url = f"{_GITHUB_API}/repos/{repo}/pulls/{pr_number}/reviews"
+        headers = await self._auth_headers(installation_id)
+        payload: dict[str, Any] = {
+            "commit_id": commit_id,
+            "body": body,
+            "event": event,
+            "comments": comments,
+        }
+        response = await self._http.post(url, headers=headers, json=payload)
+        if response.status_code >= 400:
+            raise GitHubAPIError(
+                f"failed to post review to {repo}#{pr_number}: HTTP {response.status_code}"
+            )

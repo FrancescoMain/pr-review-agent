@@ -28,6 +28,7 @@ class AgentState(TypedDict):
     gatherer_messages: NotRequired[list[BaseMessage]]
     tool_calls_used: NotRequired[int]
     review: NotRequired[ReviewResult | None]
+    raw_diff: NotRequired[str | None]
     final_comment: NotRequired[str | None]
     tokens_used: NotRequired[dict[str, int]]
     errors: NotRequired[list[str]]
