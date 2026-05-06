@@ -1,0 +1,67 @@
+# Eval dataset for W3-Task7. Each entry pins a specific PR by head_sha
+# so the case stays deterministic even if the developer keeps pushing
+# to the branch. Adding cases is a manual job — open the PR on the
+# playground, freeze its current head_sha here, and write the
+# expected behaviour.
+#
+# `installation_id` is optional: if omitted, the runner falls back to
+# Settings.github_default_installation_id (set GITHUB_DEFAULT_INSTALLATION_ID
+# in .env).
+
+- id: pr-typo-readme
+  repo: FrancescoMain/pr-review-agent-playground
+  pr_number: 999  # placeholder — replace with a real PR number when seeding
+  head_sha: "0000000000000000000000000000000000000000"
+  pr_title: "docs: fix typo in README"
+  pr_body: |
+    Trivial typo fix in README.md. No code changes.
+  expected:
+    expected_skip: true
+    must_not_flag:
+      - keyword: "blocker"
+      - keyword: "request_changes"
+  notes: |
+    A docs-only typo fix. Triage should mark should_skip=True; the
+    publisher posts a "Skipped review" comment and the gatherer +
+    reviewer never run. Cost ≈ Haiku-only ($0.001).
+
+- id: pr-divide-helper-bug
+  repo: FrancescoMain/pr-review-agent-playground
+  pr_number: 2
+  head_sha: "7d4923100000000000000000000000000000000a"  # placeholder; replace with the real sha
+  pr_title: "feat: divide and percent_change helpers"
+  pr_body: |
+    Adds two small math helpers in src/calculator.py plus a happy-path test for each.
+
+    Closes #1.
+
+    Notes:
+    - both helpers are uncovered against b == 0 / old == 0 — the agent should call this out
+  expected:
+    expected_approval: "request_changes"
+    must_flag:
+      - keyword: "ZeroDivisionError"
+        severity: ">=issue"
+      - keyword: "test"
+        severity: "any"
+    must_not_flag: []
+  notes: |
+    Two helpers with bare ZeroDivisionError on edge inputs. A good review
+    must flag the unguarded zero-division as ≥issue and recommend tests
+    for the edge case. This was the first real-PR smoke (W2 chiusura).
+
+- id: pr-large-refactor
+  repo: FrancescoMain/pr-review-agent-playground
+  pr_number: 999  # placeholder — open a refactor PR to use this case
+  head_sha: "1111111111111111111111111111111111111111"
+  pr_title: "refactor: rename foo to bar across the codebase"
+  pr_body: |
+    Pure rename across ~20 files. No behaviour change.
+  expected:
+    expected_approval: "comment"
+    must_not_flag:
+      - keyword: "ZeroDivisionError"  # we never want hallucinations on a pure rename
+  notes: |
+    A pure rename PR. Reviewer should NOT raise blockers, should NOT
+    invent issues that aren't there. This case catches over-eager
+    severity inflation.

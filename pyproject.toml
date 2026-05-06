@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "asyncpg>=0.31.0",
     "fastapi>=0.136.1",
     "httpx>=0.28.1",
     "langchain-anthropic>=1.4.3",
@@ -15,7 +16,11 @@ dependencies = [
     "langgraph>=1.1.10",
     "pydantic-settings>=2.14.0",
     "pyjwt[crypto]>=2.12.1",
+    "pyyaml>=6.0.3",
+    "qdrant-client>=1.17.1",
+    "sentence-transformers>=5.4.1",
     "structlog>=25.5.0",
+    "types-pyyaml>=6.0.12.20260408",
     "uvicorn[standard]>=0.46.0",
 ]
 

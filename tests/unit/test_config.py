@@ -54,11 +54,131 @@ def test_langsmith_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.langsmith_project == "pr-review-agent"
 
 
+def test_database_url_defaults_to_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.database_url is None
+
+
+def test_rate_limit_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    for var in ("GITHUB_RATE_LIMIT_FLOOR", "GITHUB_RATE_LIMIT_MAX_WAIT_SECONDS"):
+        monkeypatch.delenv(var, raising=False)
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.github_rate_limit_floor == 100
+    assert settings.github_rate_limit_max_wait_seconds == 60
+
+
+def test_rate_limit_settings_read_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITHUB_RATE_LIMIT_FLOOR", "500")
+    monkeypatch.setenv("GITHUB_RATE_LIMIT_MAX_WAIT_SECONDS", "30")
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.github_rate_limit_floor == 500
+    assert settings.github_rate_limit_max_wait_seconds == 30
+
+
+def test_qdrant_settings_default_to_none_and_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("QDRANT_URL", raising=False)
+    monkeypatch.delenv("QDRANT_API_KEY", raising=False)
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.qdrant_url is None
+    assert settings.qdrant_api_key.get_secret_value() == ""
+
+
+def test_convention_doc_globs_have_sensible_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CONVENTION_DOC_GLOBS", raising=False)
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert "CLAUDE.md" in settings.convention_doc_globs
+    assert "README.md" in settings.convention_doc_globs
+    assert "docs/**/*.md" in settings.convention_doc_globs
+
+
+def test_convention_recall_top_k_defaults_and_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CONVENTION_RECALL_TOP_K", raising=False)
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.convention_recall_top_k == 5
+
+    monkeypatch.setenv("CONVENTION_RECALL_TOP_K", "10")
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.convention_recall_top_k == 10
+
+
+def test_database_url_reads_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql://pr_review:pr_review@localhost:5433/pr_review_agent"
+    )
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert (
+        settings.database_url == "postgresql://pr_review:pr_review@localhost:5433/pr_review_agent"
+    )
+
+
 def test_settings_validator_rejects_missing_credentials_in_production(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.delenv("GITHUB_APP_ID", raising=False)
     monkeypatch.delenv("GITHUB_APP_PRIVATE_KEY_PATH", raising=False)
+    monkeypatch.delenv("GITHUB_APP_PRIVATE_KEY_PEM", raising=False)
     with pytest.raises(ValidationError):
         Settings(_env_file=None)  # type: ignore[call-arg]
+
+
+def test_settings_accepts_pem_inline_in_production(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The deploy path: provide the PEM directly via env var, no path needed."""
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("GITHUB_APP_ID", "123456")
+    monkeypatch.delenv("GITHUB_APP_PRIVATE_KEY_PATH", raising=False)
+    monkeypatch.setenv(
+        "GITHUB_APP_PRIVATE_KEY_PEM",
+        "-----BEGIN RSA PRIVATE KEY-----\nfake\n-----END RSA PRIVATE KEY-----\n",
+    )
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.github_app_private_key_pem is not None
+    pem = settings.resolve_github_app_private_key()
+    assert pem is not None
+    assert "BEGIN RSA PRIVATE KEY" in pem
+
+
+def test_resolve_pem_prefers_inline_over_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """When both inline and path are set, inline wins (the deploy override)."""
+    file_pem = tmp_path / "from-file.pem"
+    file_pem.write_text(
+        "-----BEGIN RSA PRIVATE KEY-----\nfromfile\n-----END RSA PRIVATE KEY-----\n"
+    )
+    monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY_PATH", str(file_pem))
+    monkeypatch.setenv(
+        "GITHUB_APP_PRIVATE_KEY_PEM",
+        "-----BEGIN RSA PRIVATE KEY-----\nfrominline\n-----END RSA PRIVATE KEY-----\n",
+    )
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    pem = settings.resolve_github_app_private_key()
+    assert pem is not None
+    assert "frominline" in pem
+    assert "fromfile" not in pem
+
+
+def test_resolve_pem_falls_back_to_path_when_inline_empty(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    file_pem = tmp_path / "from-file.pem"
+    file_pem.write_text(
+        "-----BEGIN RSA PRIVATE KEY-----\nfromfile\n-----END RSA PRIVATE KEY-----\n"
+    )
+    monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY_PATH", str(file_pem))
+    monkeypatch.delenv("GITHUB_APP_PRIVATE_KEY_PEM", raising=False)
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    pem = settings.resolve_github_app_private_key()
+    assert pem is not None
+    assert "fromfile" in pem
+
+
+def test_resolve_pem_returns_none_when_neither_is_usable() -> None:
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.resolve_github_app_private_key() is None

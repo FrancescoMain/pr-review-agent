@@ -12,6 +12,7 @@ post {
 
 headers {
   X-GitHub-Event: ping
+  X-GitHub-Delivery: 00000000-0000-0000-0000-000000000002
   Content-Type: application/json
   X-Hub-Signature-256: {{signature}}
 }
@@ -23,6 +24,7 @@ body:text {
 assert {
   res.status: eq 202
   res.body.status: eq ignored
+  res.body.delivery_id: eq 00000000-0000-0000-0000-000000000002
 }
 
 script:pre-request {
