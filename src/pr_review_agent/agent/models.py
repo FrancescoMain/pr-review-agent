@@ -68,3 +68,44 @@ class GatheredContext(BaseModel):
         default="",
         description="Open questions or caveats the Reviewer should keep in mind",
     )
+
+
+class Severity(StrEnum):
+    nit = "nit"
+    suggestion = "suggestion"
+    issue = "issue"
+    blocker = "blocker"
+
+
+class ApprovalLevel(StrEnum):
+    approve = "approve"
+    comment = "comment"
+    request_changes = "request_changes"
+
+
+class InlineComment(BaseModel):
+    path: str = Field(description="Repo-relative path of the file the comment refers to")
+    line: int = Field(gt=0, description="1-indexed line number in the post-PR file")
+    body: str = Field(description="Comment text — markdown allowed")
+    severity: Severity = Field(default=Severity.suggestion)
+
+
+class ReviewResult(BaseModel):
+    """Structured output of the Reviewer node.
+
+    The Publisher transforms this into either a single issue comment
+    (W2-Task4 transitional behaviour) or a real GitHub PR review with
+    inline annotations (W2-Task5).
+    """
+
+    overall_comment: str = Field(
+        description="Markdown summary of the review — strengths, weaknesses, overall verdict"
+    )
+    inline_comments: list[InlineComment] = Field(
+        default_factory=list[InlineComment],
+        description="Per-line comments anchored to specific files and lines",
+    )
+    approval: ApprovalLevel = Field(
+        default=ApprovalLevel.comment,
+        description="Recommendation: approve / comment / request_changes",
+    )

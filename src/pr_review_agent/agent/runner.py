@@ -25,6 +25,10 @@ from pr_review_agent.agent.graph import build_graph
 from pr_review_agent.agent.models import TriageDecision
 from pr_review_agent.agent.nodes.context_gatherer import make_context_gatherer_node
 from pr_review_agent.agent.nodes.publisher import make_publisher_node
+from pr_review_agent.agent.nodes.reviewer import (
+    make_default_review_chain_factory,
+    make_reviewer_node,
+)
 from pr_review_agent.agent.nodes.triage import make_triage_node
 from pr_review_agent.agent.state import AgentState
 from pr_review_agent.agent.tools import (
@@ -69,6 +73,14 @@ def make_default_runner(
 
     publisher = make_publisher_node(github_client)
 
+    review_chain_factory = make_default_review_chain_factory(
+        anthropic_api_key=anthropic_api_key,
+    )
+    reviewer = make_reviewer_node(
+        github_client=github_client,
+        chain_factory=review_chain_factory,
+    )
+
     gatherer_llm = ChatAnthropic(
         model_name=_GATHERER_MODEL,
         api_key=anthropic_api_key,  # type: ignore[arg-type]
@@ -100,6 +112,7 @@ def make_default_runner(
             graph: Any = build_graph(
                 triage=triage,
                 context_gatherer=gatherer,
+                reviewer=reviewer,
                 publisher=publisher,
             )
             result: Any = await graph.ainvoke(state)
