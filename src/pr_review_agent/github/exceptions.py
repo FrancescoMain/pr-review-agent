@@ -20,3 +20,13 @@ class GitHubAPIError(GitHubError):
 
 class GitHubAuthError(GitHubError):
     """GitHub App JWT or installation token was rejected (401/403)."""
+
+
+class GitHubNotFoundError(GitHubAPIError):
+    """GitHub returned 404 for the requested resource.
+
+    Subclass of ``GitHubAPIError`` so existing call sites that catch the
+    base class still work; tools that want to skip missing resources
+    (e.g. an issue referenced by ``Closes #42`` that no longer exists)
+    catch this narrower type.
+    """
