@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     cost_cap_per_pr_usd: float = 0.50
     max_tool_calls_per_node: int = 15
 
+    # GitHub API rate-limit reactive guardrail (W3-Task3).
+    # We never cross under `floor` requests remaining; if the reset is more
+    # than `max_wait_seconds` away we abort the run instead of sleeping.
+    github_rate_limit_floor: int = 100
+    github_rate_limit_max_wait_seconds: int = 60
+
     github_webhook_secret: SecretStr = SecretStr("")
     github_app_id: int = 0
     github_app_private_key_path: Path | None = None

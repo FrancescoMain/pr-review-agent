@@ -32,6 +32,25 @@ class GitHubNotFoundError(GitHubAPIError):
     """
 
 
+class GitHubRateLimitError(GitHubAPIError):
+    """GitHub primary or secondary rate limit was hit, or is about to be.
+
+    Raised both reactively (the client saw 403/429 with ``retry-after``)
+    and proactively (``X-RateLimit-Remaining`` is below the configured
+    floor and ``X-RateLimit-Reset`` is too far away to sleep through).
+    The runner catches this as a graceful abort path, mirroring
+    ``CostCapExceeded``.
+
+    ``retry_after_seconds`` is the suggested wait, when GitHub provided
+    one; ``None`` means we inferred the limit ourselves and the caller
+    can compute the wait from ``reset_epoch``.
+    """
+
+    def __init__(self, message: str, *, retry_after_seconds: int | None = None) -> None:
+        super().__init__(message)
+        self.retry_after_seconds = retry_after_seconds
+
+
 class RepoCloneError(GitHubError):
     """``git clone`` / ``git fetch`` / ``git checkout`` failed during checkout setup."""
 

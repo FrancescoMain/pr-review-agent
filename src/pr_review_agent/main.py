@@ -76,7 +76,12 @@ def _build_runner(
         return None
     pem = settings.github_app_private_key_path.read_text(encoding="utf-8")
     auth = GitHubAppAuth(app_id=settings.github_app_id, private_key=pem, http_client=http)
-    github_client = GitHubClient(auth=auth, http_client=http)
+    github_client = GitHubClient(
+        auth=auth,
+        http_client=http,
+        rate_limit_floor=settings.github_rate_limit_floor,
+        rate_limit_max_wait_seconds=settings.github_rate_limit_max_wait_seconds,
+    )
     return make_default_runner(
         anthropic_api_key=settings.anthropic_api_key.get_secret_value(),
         github_client=github_client,

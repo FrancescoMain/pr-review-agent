@@ -57,6 +57,7 @@ from pr_review_agent.db import (
 )
 from pr_review_agent.github.auth import GitHubAppAuth
 from pr_review_agent.github.client import GitHubClient
+from pr_review_agent.github.exceptions import GitHubRateLimitError
 
 _log = structlog.get_logger(__name__)
 
@@ -170,6 +171,16 @@ def make_default_runner(
                 cost_cb=cost_cb,
             )
             return state
+        except GitHubRateLimitError as exc:
+            await _abort_for_rate_limit(
+                github_client=github_client,
+                state=state,
+                exc=exc,
+                db_pool=db_pool,
+                run_id=run_id,
+                cost_cb=cost_cb,
+            )
+            return state
         except Exception as exc:
             if db_pool is not None and run_id is not None:
                 try:
@@ -250,6 +261,71 @@ async def _abort_for_cost_cap(
         )
     except Exception:
         _log.exception("could not write aborted_cost row to agent_runs")
+
+
+async def _abort_for_rate_limit(
+    *,
+    github_client: GitHubClient,
+    state: AgentState,
+    exc: GitHubRateLimitError,
+    db_pool: asyncpg.Pool | None,  # type: ignore[type-arg]
+    run_id: int | None,
+    cost_cb: CostTrackingCallback,
+) -> None:
+    """Graceful abort when GitHub rate-limit is hit (or about to be).
+
+    Posts a brief comment and records ``status='aborted_rate_limit'``
+    with the partial cost totals so we can see what the run had spent
+    before the wall. Mirrors ``_abort_for_cost_cap``.
+    """
+    retry_blurb = (
+        f" Retry in ~{exc.retry_after_seconds}s." if exc.retry_after_seconds is not None else ""
+    )
+    body = (
+        "⏳ Review aborted: GitHub API rate limit hit."
+        f"{retry_blurb}"
+        " Re-run by pushing a new commit once the limit resets."
+    )
+    try:
+        await github_client.post_pr_comment(
+            installation_id=state["installation_id"],
+            repo=state["repo"],
+            pr_number=state["pr_number"],
+            body=body,
+        )
+    except Exception:
+        # If the abort comment itself trips the rate limit again, don't blow up:
+        # the run is recorded in the DB and the developer will see the empty
+        # review when they refresh.
+        _log.exception("could not post rate-limit abort comment")
+
+    _log.warning(
+        "rate_limit.aborted",
+        repo=state["repo"],
+        pr_number=state["pr_number"],
+        retry_after_seconds=exc.retry_after_seconds,
+    )
+
+    if db_pool is None or run_id is None:
+        return
+    triage = state.get("triage")
+    totals = cost_cb.totals()
+    try:
+        await record_run_finished(
+            db_pool,
+            run_id=run_id,
+            status="aborted_rate_limit",
+            triage_change_type=triage.change_type.value if triage is not None else None,
+            triage_risk_level=triage.risk_level.value if triage is not None else None,
+            skipped=False,
+            tool_calls_used=int(state.get("tool_calls_used") or 0),
+            tokens_input=int(totals["tokens_input"]),
+            tokens_output=int(totals["tokens_output"]),
+            cost_usd=totals["cost_usd"],
+            per_model=totals["per_model"],
+        )
+    except Exception:
+        _log.exception("could not write aborted_rate_limit row to agent_runs")
 
 
 async def _persist_finished(

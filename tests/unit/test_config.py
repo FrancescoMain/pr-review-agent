@@ -60,6 +60,22 @@ def test_database_url_defaults_to_none(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.database_url is None
 
 
+def test_rate_limit_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    for var in ("GITHUB_RATE_LIMIT_FLOOR", "GITHUB_RATE_LIMIT_MAX_WAIT_SECONDS"):
+        monkeypatch.delenv(var, raising=False)
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.github_rate_limit_floor == 100
+    assert settings.github_rate_limit_max_wait_seconds == 60
+
+
+def test_rate_limit_settings_read_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITHUB_RATE_LIMIT_FLOOR", "500")
+    monkeypatch.setenv("GITHUB_RATE_LIMIT_MAX_WAIT_SECONDS", "30")
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.github_rate_limit_floor == 500
+    assert settings.github_rate_limit_max_wait_seconds == 30
+
+
 def test_database_url_reads_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(
         "DATABASE_URL", "postgresql://pr_review:pr_review@localhost:5433/pr_review_agent"
