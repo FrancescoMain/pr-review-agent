@@ -25,6 +25,7 @@ from langchain_core.messages import AIMessage
 from langchain_core.outputs import LLMResult
 
 from pr_review_agent.agent.cost_table import compute_cost_usd
+from pr_review_agent.agent.exceptions import CostCapExceeded
 
 
 class CostTrackingCallback(BaseCallbackHandler):
@@ -33,11 +34,18 @@ class CostTrackingCallback(BaseCallbackHandler):
     Threadsafety: we don't share callbacks across runs in production —
     the runner builds a fresh callback per invocation — so the state
     here is intentionally simple (no locks).
+
+    When ``cost_cap_usd`` is provided, ``on_llm_end`` raises
+    ``CostCapExceeded`` as soon as the running total first crosses the
+    cap. This stops the next LLM call (Gatherer loop, Reviewer, …) and
+    lets the runner abort the run with a clear comment instead of
+    spending more tokens.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, cost_cap_usd: Decimal | None = None) -> None:
         # {model_id: {"input": int, "output": int}}
         self._per_model: dict[str, dict[str, int]] = {}
+        self._cost_cap_usd = cost_cap_usd
 
     def on_llm_end(
         self,
@@ -55,7 +63,19 @@ class CostTrackingCallback(BaseCallbackHandler):
         bucket = self._per_model.setdefault(model_id or "unknown", {"input": 0, "output": 0})
         bucket["input"] += in_tokens
         bucket["output"] += out_tokens
+        if self._cost_cap_usd is not None:
+            current = self._current_total_cost()
+            if current > self._cost_cap_usd:
+                raise CostCapExceeded(current_cost=current, cap=self._cost_cap_usd)
         return None
+
+    def _current_total_cost(self) -> Decimal:
+        total = Decimal("0.000000")
+        for model_id, counts in self._per_model.items():
+            total += compute_cost_usd(
+                model_id, input_tokens=counts["input"], output_tokens=counts["output"]
+            )
+        return total.quantize(Decimal("0.000001"))
 
     def totals(self) -> dict[str, Any]:
         """Aggregate counts and compute per-model and overall cost.

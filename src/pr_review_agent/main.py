@@ -15,6 +15,7 @@ leaking internals (signature failures are always a generic 401).
 import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from decimal import Decimal
 
 import asyncpg
 import httpx
@@ -81,6 +82,7 @@ def _build_runner(
         github_client=github_client,
         github_auth=auth,
         db_pool=db_pool,
+        cost_cap_usd=Decimal(str(settings.cost_cap_per_pr_usd)),
     )
 
 

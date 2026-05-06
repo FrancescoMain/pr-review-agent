@@ -23,6 +23,7 @@ own contracts (``AgentRunner``, ``AgentState``) stay strict.
 """
 
 from collections.abc import Awaitable, Callable
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,7 @@ from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import ChatPromptTemplate
 
 from pr_review_agent.agent.cost_callback import CostTrackingCallback
+from pr_review_agent.agent.exceptions import CostCapExceeded
 from pr_review_agent.agent.graph import build_graph
 from pr_review_agent.agent.models import TriageDecision
 from pr_review_agent.agent.nodes.context_gatherer import make_context_gatherer_node
@@ -71,6 +73,7 @@ def make_default_runner(
     github_client: GitHubClient,
     github_auth: GitHubAppAuth,
     db_pool: asyncpg.Pool | None = None,  # type: ignore[type-arg]
+    cost_cap_usd: Decimal | None = None,
 ) -> AgentRunner:
     triage_system_prompt = (_PROMPTS_DIR / "triage.md").read_text(encoding="utf-8")
     prompt: Any = ChatPromptTemplate.from_messages(
@@ -132,7 +135,7 @@ def make_default_runner(
             except Exception:
                 _log.exception("could not insert agent_runs row; continuing without persistence")
 
-        cost_cb = CostTrackingCallback()
+        cost_cb = CostTrackingCallback(cost_cap_usd=cost_cap_usd)
 
         try:
             async with RepoCheckout(ctx=ctx, auth=github_auth) as checkout:
@@ -157,6 +160,16 @@ def make_default_runner(
                     config["metadata"] = {"correlation_id": cid}
                     config["tags"] = [f"correlation:{cid}"]
                 result: Any = await graph.ainvoke(state, config=config)
+        except CostCapExceeded as exc:
+            await _abort_for_cost_cap(
+                github_client=github_client,
+                state=state,
+                exc=exc,
+                db_pool=db_pool,
+                run_id=run_id,
+                cost_cb=cost_cb,
+            )
+            return state
         except Exception as exc:
             if db_pool is not None and run_id is not None:
                 try:
@@ -178,6 +191,65 @@ def make_default_runner(
         return final_state
 
     return run
+
+
+async def _abort_for_cost_cap(
+    *,
+    github_client: GitHubClient,
+    state: AgentState,
+    exc: CostCapExceeded,
+    db_pool: asyncpg.Pool | None,  # type: ignore[type-arg]
+    run_id: int | None,
+    cost_cb: CostTrackingCallback,
+) -> None:
+    """Graceful abort: post a brief comment and record status='aborted_cost'.
+
+    Does not re-raise: from the runner's perspective, the abort is a
+    successful termination of the run — the agent decided to stop.
+    """
+    body = (
+        f"🛑 Review aborted: cost cap reached at ${exc.current_cost:.6f} "
+        f"(cap: ${exc.cap:.6f}). "
+        "Re-run after raising COST_CAP_PER_PR_USD or splitting the PR."
+    )
+    try:
+        await github_client.post_pr_comment(
+            installation_id=state["installation_id"],
+            repo=state["repo"],
+            pr_number=state["pr_number"],
+            body=body,
+        )
+    except Exception:
+        _log.exception("could not post cost-cap abort comment")
+
+    _log.warning(
+        "cost_cap.exceeded",
+        repo=state["repo"],
+        pr_number=state["pr_number"],
+        current_cost=str(exc.current_cost),
+        cap=str(exc.cap),
+    )
+
+    if db_pool is None or run_id is None:
+        return
+    triage = state.get("triage")
+    totals = cost_cb.totals()
+    try:
+        await record_run_finished(
+            db_pool,
+            run_id=run_id,
+            status="aborted_cost",
+            triage_change_type=triage.change_type.value if triage is not None else None,
+            triage_risk_level=triage.risk_level.value if triage is not None else None,
+            skipped=False,
+            tool_calls_used=int(state.get("tool_calls_used") or 0),
+            tokens_input=int(totals["tokens_input"]),
+            tokens_output=int(totals["tokens_output"]),
+            cost_usd=totals["cost_usd"],
+            per_model=totals["per_model"],
+        )
+    except Exception:
+        _log.exception("could not write aborted_cost row to agent_runs")
 
 
 async def _persist_finished(

@@ -17,6 +17,7 @@ Una guida per task. Ogni voce racconta cosa è stato consegnato, come testarlo a
 | 2 | 5 — Pubblicazione review inline via Reviews API | [w2-task5-inline-review.md](./w2-task5-inline-review.md) | ✅ |
 | 2 | 6 — Correlation ID nei log strutturati | [w2-task6-correlation-id.md](./w2-task6-correlation-id.md) | ✅ |
 | 2 | 7 — Cost tracking persistito su Postgres | [w2-task7-cost-tracking.md](./w2-task7-cost-tracking.md) | ✅ |
+| 3 | 1 — Cost cap per PR (abort live + record `aborted_cost`) | [w3-task1-cost-cap.md](./w3-task1-cost-cap.md) | ✅ |
 
 ## Convenzioni
 

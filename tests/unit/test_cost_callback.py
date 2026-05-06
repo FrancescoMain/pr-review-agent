@@ -12,10 +12,12 @@ from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
+import pytest
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, LLMResult
 
 from pr_review_agent.agent.cost_callback import CostTrackingCallback
+from pr_review_agent.agent.exceptions import CostCapExceeded
 
 
 def _result_with_usage_metadata(*, model: str, input_tokens: int, output_tokens: int) -> LLMResult:
@@ -152,3 +154,52 @@ def test_callback_treats_unknown_model_as_zero_cost_but_keeps_tokens() -> None:
     assert totals["tokens_output"] == 500
     assert totals["cost_usd"] == Decimal("0.000000")
     assert totals["per_model"]["claude-unknown-99"]["cost_usd"] == "0.000000"
+
+
+# ---------------------------- cost cap ----------------------------
+
+
+def test_callback_without_cap_never_raises() -> None:
+    cb = CostTrackingCallback(cost_cap_usd=None)
+    for _ in range(5):
+        _on_end(
+            cb,
+            _result_with_usage_metadata(
+                model="claude-opus-4-7", input_tokens=1_000_000, output_tokens=1_000_000
+            ),
+        )
+    # No raise; totals reflect 5 invocations of $90 each = $450.
+    assert cb.totals()["cost_usd"] == Decimal("450.000000")
+
+
+def test_callback_raises_when_first_call_exceeds_cap() -> None:
+    cb = CostTrackingCallback(cost_cap_usd=Decimal("0.001"))
+    # Sonnet at 100/50 → $0.000300 + $0.000750 = $0.001050 > cap.
+    with pytest.raises(CostCapExceeded) as exc_info:
+        _on_end(
+            cb,
+            _result_with_usage_metadata(
+                model="claude-sonnet-4-6", input_tokens=100, output_tokens=50
+            ),
+        )
+    assert exc_info.value.cap == Decimal("0.001")
+    assert exc_info.value.current_cost > exc_info.value.cap
+
+
+def test_callback_raises_only_when_cap_is_actually_crossed() -> None:
+    """First call stays under cap; second call crosses it → exception only at #2."""
+    cb = CostTrackingCallback(cost_cap_usd=Decimal("0.000800"))
+    # First call: Sonnet 100/50 = $0.00105... wait, that already crosses 0.0008.
+    # Use 100/0 instead → $0.000300, well under cap.
+    _on_end(
+        cb,
+        _result_with_usage_metadata(model="claude-sonnet-4-6", input_tokens=100, output_tokens=0),
+    )
+    # Second call: another $0.000600 → total $0.000900 > $0.000800 cap.
+    with pytest.raises(CostCapExceeded):
+        _on_end(
+            cb,
+            _result_with_usage_metadata(
+                model="claude-sonnet-4-6", input_tokens=200, output_tokens=0
+            ),
+        )
