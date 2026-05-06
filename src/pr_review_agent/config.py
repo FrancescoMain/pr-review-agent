@@ -100,18 +100,42 @@ class Settings(BaseSettings):
         The inline env var wins over the path when both are supplied — useful
         when promoting a deployed service to a new key without touching the
         filesystem.
+
+        On hosting platforms that flatten multi-line env vars into a single
+        line (Railway, Heroku, some Docker setups), the PEM arrives with
+        literal ``\\n`` sequences instead of real newlines and PyJWT rejects
+        it as ``InvalidKeyError: Could not parse the provided public key``.
+        We unwrap that automatically — and the no-op when the input already
+        has real newlines is cheap.
         """
         if (
             self.github_app_private_key_pem is not None
             and self.github_app_private_key_pem.get_secret_value()
         ):
-            return self.github_app_private_key_pem.get_secret_value()
+            pem = self.github_app_private_key_pem.get_secret_value()
+            return _normalise_pem_newlines(pem)
         if (
             self.github_app_private_key_path is not None
             and self.github_app_private_key_path.exists()
         ):
             return self.github_app_private_key_path.read_text(encoding="utf-8")
         return None
+
+
+def _normalise_pem_newlines(pem: str) -> str:
+    """Convert literal ``\\n`` to real newlines when needed.
+
+    A correctly-pasted PEM has real newlines and zero ``\\n`` substrings —
+    we leave it untouched. A flattened PEM has ``\\n`` substrings instead
+    of newlines and we unwrap them. Stripped of accidental wrapping quotes
+    (single Railway issue we've seen).
+    """
+    pem = pem.strip()
+    if pem.startswith('"') and pem.endswith('"'):
+        pem = pem[1:-1]
+    if "\\n" in pem and "\n" not in pem:
+        pem = pem.replace("\\n", "\n")
+    return pem
 
 
 @lru_cache(maxsize=1)

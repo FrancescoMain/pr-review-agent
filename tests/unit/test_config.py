@@ -182,3 +182,51 @@ def test_resolve_pem_falls_back_to_path_when_inline_empty(
 def test_resolve_pem_returns_none_when_neither_is_usable() -> None:
     settings = Settings(_env_file=None)  # type: ignore[call-arg]
     assert settings.resolve_github_app_private_key() is None
+
+
+def test_resolve_pem_unwraps_literal_backslash_n_from_flattened_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Railway/Heroku flatten multi-line env vars to a single line with literal \\n.
+
+    Without this normalisation, PyJWT would reject the PEM with
+    ``InvalidKeyError: Could not parse the provided public key``.
+    """
+    flattened = (
+        "-----BEGIN RSA PRIVATE KEY-----\\n"
+        "MIIEowIBAAKCAQEA\\n"
+        "fakebodyfakebodyfakebody\\n"
+        "-----END RSA PRIVATE KEY-----\\n"
+    )
+    monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY_PEM", flattened)
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    pem = settings.resolve_github_app_private_key()
+    assert pem is not None
+    # Real newlines, not backslash-n.
+    assert "\n" in pem
+    assert "\\n" not in pem
+    assert pem.startswith("-----BEGIN RSA PRIVATE KEY-----\n")
+    assert pem.rstrip("\n").endswith("-----END RSA PRIVATE KEY-----")
+
+
+def test_resolve_pem_leaves_real_newlines_alone(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A correctly-formatted PEM with real newlines must round-trip unchanged."""
+    proper = (
+        "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA\nbody\n-----END RSA PRIVATE KEY-----\n"
+    )
+    monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY_PEM", proper)
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.resolve_github_app_private_key() == proper.strip()
+
+
+def test_resolve_pem_strips_accidental_wrapping_quotes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Some env editors wrap multi-line values in double quotes; strip them."""
+    quoted = '"-----BEGIN RSA PRIVATE KEY-----\nbody\n-----END RSA PRIVATE KEY-----"'
+    monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY_PEM", quoted)
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    pem = settings.resolve_github_app_private_key()
+    assert pem is not None
+    assert not pem.startswith('"')
+    assert not pem.endswith('"')
