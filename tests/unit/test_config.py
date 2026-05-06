@@ -76,6 +76,24 @@ def test_rate_limit_settings_read_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.github_rate_limit_max_wait_seconds == 30
 
 
+def test_qdrant_settings_default_to_none_and_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("QDRANT_URL", raising=False)
+    monkeypatch.delenv("QDRANT_API_KEY", raising=False)
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.qdrant_url is None
+    assert settings.qdrant_api_key.get_secret_value() == ""
+
+
+def test_convention_doc_globs_have_sensible_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CONVENTION_DOC_GLOBS", raising=False)
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert "CLAUDE.md" in settings.convention_doc_globs
+    assert "README.md" in settings.convention_doc_globs
+    assert "docs/**/*.md" in settings.convention_doc_globs
+
+
 def test_database_url_reads_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(
         "DATABASE_URL", "postgresql://pr_review:pr_review@localhost:5433/pr_review_agent"

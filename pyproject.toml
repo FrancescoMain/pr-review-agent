@@ -16,6 +16,8 @@ dependencies = [
     "langgraph>=1.1.10",
     "pydantic-settings>=2.14.0",
     "pyjwt[crypto]>=2.12.1",
+    "qdrant-client>=1.17.1",
+    "sentence-transformers>=5.4.1",
     "structlog>=25.5.0",
     "uvicorn[standard]>=0.46.0",
 ]

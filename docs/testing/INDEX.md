@@ -20,6 +20,7 @@ Una guida per task. Ogni voce racconta cosa è stato consegnato, come testarlo a
 | 3 | 1 — Cost cap per PR (abort live + record `aborted_cost`) | [w3-task1-cost-cap.md](./w3-task1-cost-cap.md) | ✅ |
 | 3 | 2 — Idempotency su `X-GitHub-Delivery` | [w3-task2-idempotency.md](./w3-task2-idempotency.md) | ✅ |
 | 3 | 3 — Rate limit GitHub API (sleep / abort) | [w3-task3-rate-limit.md](./w3-task3-rate-limit.md) | ✅ |
+| 3 | 4 — Ingest convenzioni in Qdrant (CLI) | [w3-task4-qdrant-ingest.md](./w3-task4-qdrant-ingest.md) | ✅ |
 
 ## Convenzioni
 

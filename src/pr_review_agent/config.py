@@ -50,6 +50,22 @@ class Settings(BaseSettings):
     # Default points at the docker-compose container from W1-Task6 (host port 5433).
     database_url: str | None = None
 
+    # Qdrant for the convention-memory subsystem (W3-Task4). None disables the
+    # ingest CLI gracefully. Default in .env.example points at the docker-compose
+    # qdrant service on port 6333. The api_key is empty for local dev and is
+    # filled when pointing at hosted Qdrant cloud.
+    qdrant_url: str | None = None
+    qdrant_api_key: SecretStr = SecretStr("")
+    convention_doc_globs: list[str] = [
+        "CLAUDE.md",
+        "AGENTS.md",
+        "README.md",
+        "README.rst",
+        "CONTRIBUTING.md",
+        ".editorconfig",
+        "docs/**/*.md",
+    ]
+
     @model_validator(mode="after")
     def _require_credentials_outside_dev(self) -> Self:
         if self.environment != "development":
