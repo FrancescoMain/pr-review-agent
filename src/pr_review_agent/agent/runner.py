@@ -35,6 +35,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from pr_review_agent.agent.cost_callback import CostTrackingCallback
 from pr_review_agent.agent.exceptions import CostCapExceeded
 from pr_review_agent.agent.graph import build_graph
+from pr_review_agent.agent.memory.store import ConventionStore
 from pr_review_agent.agent.models import TriageDecision
 from pr_review_agent.agent.nodes.context_gatherer import make_context_gatherer_node
 from pr_review_agent.agent.nodes.publisher import make_publisher_node
@@ -47,6 +48,7 @@ from pr_review_agent.agent.state import AgentState
 from pr_review_agent.agent.tools import (
     PRContext,
     RepoCheckout,
+    make_convention_tools,
     make_filesystem_tools,
     make_github_tools,
 )
@@ -75,6 +77,8 @@ def make_default_runner(
     github_auth: GitHubAppAuth,
     db_pool: asyncpg.Pool | None = None,  # type: ignore[type-arg]
     cost_cap_usd: Decimal | None = None,
+    convention_store: ConventionStore | None = None,
+    convention_recall_top_k: int = 5,
 ) -> AgentRunner:
     triage_system_prompt = (_PROMPTS_DIR / "triage.md").read_text(encoding="utf-8")
     prompt: Any = ChatPromptTemplate.from_messages(
@@ -146,9 +150,18 @@ def make_default_runner(
                     pr_body_provider=lambda: pr_body,
                 )
                 filesystem_tools = make_filesystem_tools(checkout.root)
+                convention_tools = (
+                    make_convention_tools(
+                        store=convention_store,
+                        repo=state["repo"],
+                        top_k=convention_recall_top_k,
+                    )
+                    if convention_store is not None
+                    else []
+                )
                 gatherer = make_context_gatherer_node(
                     model=gatherer_llm,
-                    repo_tools=[*github_tools, *filesystem_tools],
+                    repo_tools=[*github_tools, *filesystem_tools, *convention_tools],
                 )
                 graph: Any = build_graph(
                     triage=triage,

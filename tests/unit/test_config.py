@@ -94,6 +94,16 @@ def test_convention_doc_globs_have_sensible_defaults(
     assert "docs/**/*.md" in settings.convention_doc_globs
 
 
+def test_convention_recall_top_k_defaults_and_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CONVENTION_RECALL_TOP_K", raising=False)
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.convention_recall_top_k == 5
+
+    monkeypatch.setenv("CONVENTION_RECALL_TOP_K", "10")
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.convention_recall_top_k == 10
+
+
 def test_database_url_reads_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(
         "DATABASE_URL", "postgresql://pr_review:pr_review@localhost:5433/pr_review_agent"

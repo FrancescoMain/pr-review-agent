@@ -266,3 +266,59 @@ async def test_gatherer_handles_unknown_tool_gracefully() -> None:
     assert isinstance(update["gathered_context"], GatheredContext)
     contents = [getattr(m, "content", "") for m in update["gatherer_messages"]]
     assert any("unknown tool" in c for c in contents)
+
+
+# ---------------------------- recall_conventions integration ----------------------------
+
+
+async def test_gatherer_can_call_recall_conventions_and_see_matches() -> None:
+    """The recall_conventions tool roundtrips: the LLM sees the matches as a JSON tool message.
+
+    We add a fake recall tool to the gatherer's repo_tools and script
+    the model to call it, then close with final_answer. The point is
+    that the JSON the gatherer hands back to the model contains the
+    matches' text — i.e. the Reviewer downstream will have access to
+    project-specific guidance via the gatherer's transcript.
+    """
+    from pr_review_agent.agent.memory.store import ConventionMatch
+
+    @tool
+    async def recall_conventions(query: str) -> list[ConventionMatch]:
+        """Fake convention recall."""
+        del query
+        return [
+            ConventionMatch(
+                path="CLAUDE.md",
+                chunk_index=0,
+                text="use `uv` for dependencies",
+                score=0.92,
+            ),
+        ]
+
+    model = _ScriptedChatModel(
+        responses=[
+            _ai([_tc("recall_conventions", {"query": "deps?"}, "c1")]),
+            _ai(
+                [
+                    _tc(
+                        "final_answer",
+                        {
+                            "summary": "respects uv convention",
+                            "relevant_files": ["CLAUDE.md"],
+                            "notes": "",
+                        },
+                        "c2",
+                    )
+                ]
+            ),
+        ]
+    )
+    repo_tools = [*_build_repo_tools(), recall_conventions]
+    node = make_context_gatherer_node(model=model, repo_tools=repo_tools, system_prompt="test")
+
+    update = await node(_state())
+
+    assert isinstance(update["gathered_context"], GatheredContext)
+    contents = [getattr(m, "content", "") for m in update["gatherer_messages"]]
+    # The recall tool message must surface the chunk text to the model.
+    assert any("use `uv` for dependencies" in c for c in contents)

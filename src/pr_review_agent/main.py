@@ -22,7 +22,10 @@ import httpx
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from qdrant_client import AsyncQdrantClient
 
+from pr_review_agent.agent.memory.embedder import Embedder
+from pr_review_agent.agent.memory.store import ConventionStore
 from pr_review_agent.agent.runner import AgentRunner, make_default_runner
 from pr_review_agent.config import Settings, get_settings
 from pr_review_agent.db import apply_migrations
@@ -58,6 +61,7 @@ def _build_runner(
     settings: Settings,
     http: httpx.AsyncClient,
     db_pool: asyncpg.Pool | None,  # type: ignore[type-arg]
+    convention_store: ConventionStore | None,
 ) -> AgentRunner | None:
     if settings.github_app_id <= 0:
         _log.warning("agent runner disabled: GITHUB_APP_ID not set")
@@ -88,6 +92,8 @@ def _build_runner(
         github_auth=auth,
         db_pool=db_pool,
         cost_cap_usd=Decimal(str(settings.cost_cap_per_pr_usd)),
+        convention_store=convention_store,
+        convention_recall_top_k=settings.convention_recall_top_k,
     )
 
 
@@ -113,13 +119,33 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     else:
         _log.warning("DATABASE_URL not set: agent runs will not be persisted")
 
+    qdrant_client: AsyncQdrantClient | None = None
+    convention_store: ConventionStore | None = None
+    if settings.qdrant_url:
+        try:
+            qdrant_client = AsyncQdrantClient(
+                url=settings.qdrant_url,
+                api_key=settings.qdrant_api_key.get_secret_value() or None,
+            )
+            convention_store = ConventionStore(client=qdrant_client, embedder=Embedder())
+            _log.info("convention store ready", url=settings.qdrant_url)
+        except Exception:
+            _log.exception("failed to initialise Qdrant client; convention recall disabled")
+            qdrant_client = None
+            convention_store = None
+    else:
+        _log.warning("QDRANT_URL not set: recall_conventions tool will not be exposed")
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as http:
             app.state.http_client = http
             app.state.db_pool = db_pool
-            app.state.agent_runner = _build_runner(settings, http, db_pool)
+            app.state.convention_store = convention_store
+            app.state.agent_runner = _build_runner(settings, http, db_pool, convention_store)
             yield
     finally:
+        if qdrant_client is not None:
+            await qdrant_client.close()
         if db_pool is not None:
             await db_pool.close()
 

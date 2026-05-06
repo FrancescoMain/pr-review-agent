@@ -65,6 +65,7 @@ class Settings(BaseSettings):
         ".editorconfig",
         "docs/**/*.md",
     ]
+    convention_recall_top_k: int = 5
 
     @model_validator(mode="after")
     def _require_credentials_outside_dev(self) -> Self:

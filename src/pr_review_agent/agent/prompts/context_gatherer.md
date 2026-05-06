@@ -7,6 +7,7 @@ You have access to these tools:
 - `read_file(path)` — read a file from the PR head, repo-relative path.
 - `list_directory(path)` — list children of a directory; use "." for the repo root.
 - `search_code(query, file_pattern=None)` — fixed-string search via git grep.
+- `recall_conventions(query)` — search the project's convention memory (CLAUDE.md, README, docs/) for project-specific rules. Use this BEFORE making style assumptions: the project may have its own way of doing things (naming, error handling, async patterns, commit style). Empty result means no specific guidance — fall back to general best practices. NOT exposed for repos that haven't been ingested yet — if you don't see this tool in your toolset, skip the step.
 - `final_answer(summary, relevant_files, notes)` — call this when you are done.
 
 Strategy:

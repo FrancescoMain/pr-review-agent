@@ -15,6 +15,7 @@ from qdrant_client import AsyncQdrantClient
 from pr_review_agent.agent.memory.embedder import Embedder
 from pr_review_agent.agent.memory.store import (
     ConventionDocument,
+    ConventionMatch,
     ConventionStore,
     collection_name_for,
 )
@@ -84,3 +85,45 @@ async def test_upsert_zero_documents_writes_nothing(store: ConventionStore) -> N
     written = await store.upsert_chunks(repo=repo, head_sha="x", documents=[])
     assert written == 0
     assert await store.count(repo) == 0
+
+
+async def test_query_returns_matches_in_score_order(store: ConventionStore) -> None:
+    repo = "francesco/playground"
+    await store.recreate_collection(repo)
+    await store.upsert_chunks(
+        repo=repo,
+        head_sha="abc",
+        documents=[
+            ConventionDocument(path="CLAUDE.md", chunk_index=0, text="use uv"),
+            ConventionDocument(
+                path="CLAUDE.md", chunk_index=1, text="commits in conventional form"
+            ),
+            ConventionDocument(path="README.md", chunk_index=0, text="hello world"),
+        ],
+    )
+    matches = await store.query_conventions(repo=repo, query="how do I commit?", top_k=2)
+
+    assert all(isinstance(m, ConventionMatch) for m in matches)
+    assert len(matches) == 2
+    # Each match must carry its source path + the original text payload.
+    assert {m.path for m in matches} <= {"CLAUDE.md", "README.md"}
+    assert all(m.text in {"use uv", "commits in conventional form", "hello world"} for m in matches)
+    # Scores are ordered descending (best first).
+    assert matches[0].score >= matches[1].score
+
+
+async def test_query_returns_empty_for_unknown_repo(store: ConventionStore) -> None:
+    """Querying a repo that was never ingested → empty list, no exception."""
+    matches = await store.query_conventions(repo="unknown/never-seeded", query="anything", top_k=3)
+    assert matches == []
+
+
+async def test_query_returns_empty_for_empty_query(store: ConventionStore) -> None:
+    repo = "francesco/playground"
+    await store.recreate_collection(repo)
+    await store.upsert_chunks(
+        repo=repo,
+        head_sha="x",
+        documents=[ConventionDocument(path="x.md", chunk_index=0, text="x")],
+    )
+    assert await store.query_conventions(repo=repo, query="   ", top_k=3) == []

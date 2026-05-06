@@ -1,11 +1,15 @@
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false, reportArgumentType=false
 """Qdrant-backed convention store.
 
-W3-Task4 owns the *write* side: the ingest CLI uses
-``recreate_collection`` to start fresh per run, then ``upsert_chunks``
-to push the embedded paragraphs of a repo's convention docs. W3-Task5
-will add ``query_conventions`` for the read side that the Context
-Gatherer's ``recall_conventions`` tool will consume.
+Two surfaces:
+
+- **Write** (W3-Task4): the ingest CLI uses ``recreate_collection`` to
+  start fresh per run, then ``upsert_chunks`` to push the embedded
+  paragraphs of a repo's convention docs.
+- **Read** (W3-Task5): ``query_conventions`` runs a similarity search
+  against the per-repo collection and returns the top-k matches as
+  ``ConventionMatch`` Pydantic objects. The Context Gatherer's
+  ``recall_conventions`` tool consumes this directly.
 
 Collections are scoped by repo (``conventions_<owner>_<name>``) so we
 can drop and rebuild a single repo's memory without affecting others,
@@ -17,7 +21,9 @@ import datetime as dt
 from dataclasses import dataclass
 
 import structlog
+from pydantic import BaseModel, Field
 from qdrant_client import AsyncQdrantClient
+from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
 from pr_review_agent.agent.memory.embedder import DEFAULT_VECTOR_SIZE, Embedder
@@ -37,6 +43,19 @@ class ConventionDocument:
     path: str
     chunk_index: int
     text: str
+
+
+class ConventionMatch(BaseModel):
+    """A single similarity-search result from ``query_conventions``.
+
+    Pydantic (not dataclass) because the LangChain tool serialises this
+    to JSON for the LLM and we want ``model_dump()`` for free.
+    """
+
+    path: str
+    chunk_index: int
+    text: str
+    score: float = Field(description="Cosine similarity in [0, 1]; higher is closer")
 
 
 def collection_name_for(repo: str) -> str:
@@ -114,3 +133,54 @@ class ConventionStore:
         name = collection_name_for(repo)
         result = await self._client.count(collection_name=name, exact=True)
         return int(result.count)
+
+    async def query_conventions(
+        self, *, repo: str, query: str, top_k: int = 5
+    ) -> list[ConventionMatch]:
+        """Return up to ``top_k`` matches for ``query`` in the repo's collection.
+
+        If the collection doesn't exist (e.g. the repo was never
+        ingested) we log a warning and return an empty list instead of
+        raising — the caller is the Context Gatherer's tool, and we'd
+        rather have a graceful "no matches" than a runtime error on
+        repos that haven't been seeded yet.
+        """
+        if not query.strip():
+            return []
+        name = collection_name_for(repo)
+        vectors = self._embedder.encode([query])
+        if not vectors:
+            return []
+        try:
+            response = await self._client.query_points(
+                collection_name=name,
+                query=vectors[0],
+                limit=top_k,
+                with_payload=True,
+            )
+        except (UnexpectedResponse, ValueError) as exc:
+            _log.warning(
+                "convention_recall.collection_missing",
+                collection=name,
+                repo=repo,
+                error=str(exc),
+            )
+            return []
+
+        matches: list[ConventionMatch] = []
+        for point in response.points:
+            payload = point.payload or {}
+            path = payload.get("path")
+            chunk_index = payload.get("chunk_index")
+            text = payload.get("text")
+            if not isinstance(path, str) or not isinstance(text, str):
+                continue
+            matches.append(
+                ConventionMatch(
+                    path=path,
+                    chunk_index=int(chunk_index) if isinstance(chunk_index, int) else 0,
+                    text=text,
+                    score=float(point.score),
+                )
+            )
+        return matches
