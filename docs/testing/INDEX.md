@@ -16,6 +16,7 @@ Una guida per task. Ogni voce racconta cosa è stato consegnato, come testarlo a
 | 2 | 4 — Nodo Reviewer + skip-route post-triage | [w2-task4-reviewer.md](./w2-task4-reviewer.md) | ✅ |
 | 2 | 5 — Pubblicazione review inline via Reviews API | [w2-task5-inline-review.md](./w2-task5-inline-review.md) | ✅ |
 | 2 | 6 — Correlation ID nei log strutturati | [w2-task6-correlation-id.md](./w2-task6-correlation-id.md) | ✅ |
+| 2 | 7 — Cost tracking persistito su Postgres | [w2-task7-cost-tracking.md](./w2-task7-cost-tracking.md) | ✅ |
 
 ## Convenzioni
 

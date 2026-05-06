@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     langsmith_api_key: SecretStr = SecretStr("")
     langsmith_project: str = "pr-review-agent"
 
+    # Postgres for run/cost persistence. None disables persistence with a warning;
+    # the agent still runs, it just won't be observable through the cost tables.
+    # Default points at the docker-compose container from W1-Task6 (host port 5433).
+    database_url: str | None = None
+
     @model_validator(mode="after")
     def _require_credentials_outside_dev(self) -> Self:
         if self.environment != "development":

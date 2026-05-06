@@ -54,6 +54,22 @@ def test_langsmith_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.langsmith_project == "pr-review-agent"
 
 
+def test_database_url_defaults_to_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.database_url is None
+
+
+def test_database_url_reads_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql://pr_review:pr_review@localhost:5433/pr_review_agent"
+    )
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert (
+        settings.database_url == "postgresql://pr_review:pr_review@localhost:5433/pr_review_agent"
+    )
+
+
 def test_settings_validator_rejects_missing_credentials_in_production(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

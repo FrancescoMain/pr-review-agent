@@ -1,10 +1,12 @@
+# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false
 """FastAPI application entry point.
 
 Wires routers, configures structured logging, and — at startup —
 composes the long-lived dependencies the agent needs (httpx pool,
-GitHub auth/client, runner) into ``app.state``. The webhook handler
-reads them from there via ``request.app.state`` so we have one
-connection pool and one in-memory token cache per process.
+GitHub auth/client, optional Postgres pool, runner) into
+``app.state``. The webhook handler reads them from there via
+``request.app.state`` so we have one connection pool and one in-memory
+token cache per process.
 
 Exception handlers map domain errors to safe HTTP responses without
 leaking internals (signature failures are always a generic 401).
@@ -14,6 +16,7 @@ import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
+import asyncpg
 import httpx
 import structlog
 from fastapi import FastAPI, Request
@@ -21,6 +24,7 @@ from fastapi.responses import JSONResponse
 
 from pr_review_agent.agent.runner import AgentRunner, make_default_runner
 from pr_review_agent.config import Settings, get_settings
+from pr_review_agent.db import apply_migrations
 from pr_review_agent.github.auth import GitHubAppAuth
 from pr_review_agent.github.client import GitHubClient
 from pr_review_agent.github.exceptions import WebhookSignatureError
@@ -49,7 +53,11 @@ def _enable_langsmith_tracing(settings: Settings) -> None:
     _log.info("LangSmith tracing enabled", project=settings.langsmith_project)
 
 
-def _build_runner(settings: Settings, http: httpx.AsyncClient) -> AgentRunner | None:
+def _build_runner(
+    settings: Settings,
+    http: httpx.AsyncClient,
+    db_pool: asyncpg.Pool | None,  # type: ignore[type-arg]
+) -> AgentRunner | None:
     if settings.github_app_id <= 0:
         _log.warning("agent runner disabled: GITHUB_APP_ID not set")
         return None
@@ -72,6 +80,7 @@ def _build_runner(settings: Settings, http: httpx.AsyncClient) -> AgentRunner | 
         anthropic_api_key=settings.anthropic_api_key.get_secret_value(),
         github_client=github_client,
         github_auth=auth,
+        db_pool=db_pool,
     )
 
 
@@ -83,10 +92,29 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         json_logs=settings.environment != "development",
     )
     _enable_langsmith_tracing(settings)
-    async with httpx.AsyncClient(timeout=30.0) as http:
-        app.state.http_client = http
-        app.state.agent_runner = _build_runner(settings, http)
-        yield
+
+    db_pool: asyncpg.Pool | None = None  # type: ignore[type-arg]
+    if settings.database_url:
+        try:
+            db_pool = await asyncpg.create_pool(settings.database_url)
+            assert db_pool is not None  # narrow for type checkers
+            await apply_migrations(db_pool)
+            _log.info("database pool ready and migrations applied")
+        except Exception:
+            _log.exception("failed to initialise database pool; persistence disabled")
+            db_pool = None
+    else:
+        _log.warning("DATABASE_URL not set: agent runs will not be persisted")
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as http:
+            app.state.http_client = http
+            app.state.db_pool = db_pool
+            app.state.agent_runner = _build_runner(settings, http, db_pool)
+            yield
+    finally:
+        if db_pool is not None:
+            await db_pool.close()
 
 
 app = FastAPI(
