@@ -37,7 +37,7 @@ Per i test pytest **non serve** Postgres (fake pool). Per smoke locale serve il 
 ```bash
 docker compose up -d postgres
 # Default DSN per .env locale (porta 5433 perché 5432 è occupata da pinkcare-db):
-# DATABASE_URL=postgresql://pr_review:pr_review@localhost:5433/pr_review_agent
+# DATABASE_URL=postgresql://postgres:postgres@localhost:5433/pr_review_agent
 ```
 
 ## Scenari da testare manualmente
@@ -76,7 +76,7 @@ Atteso: stesso risultato di W2 Task 6 (26/26 assertions verdi).
 
 ```bash
 docker compose up -d postgres
-DATABASE_URL=postgresql://pr_review:pr_review@localhost:5433/pr_review_agent \
+DATABASE_URL=postgresql://postgres:postgres@localhost:5433/pr_review_agent \
 GITHUB_WEBHOOK_SECRET=test-bruno-secret \
   uv run uvicorn pr_review_agent.main:app --port 8001
 ```
@@ -87,7 +87,7 @@ Nei log vedi:
 - All'arrivo di un webhook `pull_request`: dopo che il run dell'agente termina, query la tabella:
 
 ```bash
-docker compose exec postgres psql -U pr_review -d pr_review_agent \
+docker compose exec postgres psql -U postgres -d pr_review_agent \
   -c "SELECT id, correlation_id, repo, pr_number, status, tokens_input, tokens_output, cost_usd FROM agent_runs ORDER BY id DESC LIMIT 5;"
 ```
 
