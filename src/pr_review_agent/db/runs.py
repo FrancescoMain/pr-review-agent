@@ -89,6 +89,26 @@ async def record_run_finished(
         )
 
 
+async def find_run_by_correlation_id(
+    pool: asyncpg.Pool,  # type: ignore[type-arg]
+    *,
+    correlation_id: str,
+) -> int | None:
+    """Return the ``agent_runs.id`` of any run with this correlation id, or ``None``.
+
+    Used by the webhook handler to drop duplicate ``X-GitHub-Delivery``
+    redeliveries before they trigger a second agent run. Hits any row
+    regardless of status: a still-running, failed, or finished run all
+    count as "already seen this delivery".
+    """
+    async with pool.acquire() as conn:
+        row_id: int | None = await conn.fetchval(
+            "SELECT id FROM agent_runs WHERE correlation_id = $1 LIMIT 1",
+            correlation_id,
+        )
+        return row_id
+
+
 async def record_run_failed(
     pool: asyncpg.Pool,  # type: ignore[type-arg]
     *,

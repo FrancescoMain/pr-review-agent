@@ -13,6 +13,7 @@ are explicit, and we don't pay the cost of a query layer.
 
 from pr_review_agent.db.migrations import apply_migrations
 from pr_review_agent.db.runs import (
+    find_run_by_correlation_id,
     record_run_failed,
     record_run_finished,
     record_run_started,
@@ -20,6 +21,7 @@ from pr_review_agent.db.runs import (
 
 __all__ = [
     "apply_migrations",
+    "find_run_by_correlation_id",
     "record_run_failed",
     "record_run_finished",
     "record_run_started",

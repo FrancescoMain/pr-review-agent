@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 
 from pr_review_agent.db.runs import (
+    find_run_by_correlation_id,
     record_run_failed,
     record_run_finished,
     record_run_started,
@@ -143,3 +144,26 @@ async def test_record_run_failed_truncates_long_error(pool: _FakePool) -> None:
     assert params[0] == 42
     assert params[1] == long_msg[:500]
     assert len(params[1]) == 500
+
+
+async def test_find_run_by_correlation_id_returns_id_on_hit() -> None:
+    pool = _FakePool(fetchval_returns=99)
+    found = await find_run_by_correlation_id(
+        pool,  # type: ignore[arg-type]
+        correlation_id="abc-123",
+    )
+    assert found == 99
+    sql, params = pool.conn.fetchvals[0]
+    assert "SELECT id FROM agent_runs" in sql
+    assert "WHERE correlation_id = $1" in sql
+    assert "LIMIT 1" in sql
+    assert params == ("abc-123",)
+
+
+async def test_find_run_by_correlation_id_returns_none_on_miss() -> None:
+    pool = _FakePool(fetchval_returns=None)
+    found = await find_run_by_correlation_id(
+        pool,  # type: ignore[arg-type]
+        correlation_id="never-seen",
+    )
+    assert found is None

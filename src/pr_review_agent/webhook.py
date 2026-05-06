@@ -9,7 +9,14 @@ Pipeline for an incoming delivery:
      etc.; we acknowledge them so GitHub stops retrying);
   5. validate the payload with the Pydantic model, returning 422 on shape
      mismatch;
-  6. schedule the agent run as a FastAPI ``BackgroundTask`` and return
+  6. **idempotency check** (W3-Task2): if the ``X-GitHub-Delivery`` of
+     this request has already been seen — there's an ``agent_runs`` row
+     with that ``correlation_id`` — return 202 with
+     ``status='duplicate'`` and skip the dispatch. Protects against
+     GitHub's automatic redeliveries (timeout, 5xx) creating duplicate
+     runs and double-spending tokens. If the DB is unreachable the
+     check is skipped with a warning — availability beats idempotency.
+  7. schedule the agent run as a FastAPI ``BackgroundTask`` and return
      202 immediately. The agent receives a fully-typed ``AgentState``;
      errors in the background task are caught and logged via structlog
      so they never propagate to the GitHub delivery.
@@ -37,6 +44,7 @@ from pydantic import ValidationError
 from pr_review_agent.agent.runner import AgentRunner
 from pr_review_agent.agent.state import AgentState
 from pr_review_agent.config import Settings, get_settings
+from pr_review_agent.db import find_run_by_correlation_id
 from pr_review_agent.github.models import PullRequestEvent
 from pr_review_agent.github.signatures import verify_signature
 from pr_review_agent.observability.correlation import (
@@ -109,6 +117,40 @@ async def github_webhook(
         "tokens_used": {},
         "errors": [],
     }
+
+    # Idempotency: skip dispatch if we've already seen this exact delivery.
+    # Only meaningful when GitHub provided X-GitHub-Delivery (not the uuid
+    # fallback path) AND we have a DB pool to query.
+    upstream_delivery = request.headers.get("X-GitHub-Delivery")
+    db_pool = getattr(request.app.state, "db_pool", None)
+    if upstream_delivery and db_pool is not None:
+        try:
+            existing_run_id = await find_run_by_correlation_id(
+                db_pool, correlation_id=upstream_delivery
+            )
+        except Exception:
+            _log.warning(
+                "idempotency_check_failed; dispatching anyway",
+                delivery_id=delivery_id,
+                exc_info=True,
+            )
+            existing_run_id = None
+        if existing_run_id is not None:
+            _log.info(
+                "duplicate delivery; skipping dispatch",
+                delivery_id=delivery_id,
+                first_seen_run_id=existing_run_id,
+                repo=state["repo"],
+                pr_number=state["pr_number"],
+            )
+            return {
+                "status": "duplicate",
+                "pr": pr_event.number,
+                "repo": pr_event.repository.full_name,
+                "installation_id": pr_event.installation.id,
+                "delivery_id": delivery_id,
+                "first_seen_run_id": existing_run_id,
+            }
 
     runner: AgentRunner | None = getattr(request.app.state, "agent_runner", None)
     if runner is None:
