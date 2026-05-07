@@ -198,7 +198,7 @@ tests/unit/            # 227 unit tests, all offline
 
 ## License
 
-Open for portfolio review. License will be set explicitly before any external use.
+Released under the [MIT License](./LICENSE).
 
 ## Contact
 

@@ -198,7 +198,7 @@ tests/unit/            # 227 test unit, tutti offline
 
 ## Licenza
 
-Aperto per review portfolio. La licenza verrà definita esplicitamente prima di qualsiasi uso esterno.
+Rilasciato sotto [MIT License](./LICENSE).
 
 ## Contatti
 
